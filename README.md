@@ -2,6 +2,10 @@
 
 Lightweight Windows tray app for exposing a local Chrome-family browser to AI agents over a Tailscale-secured CDP bridge.
 
+简单说，它能把你这台 Windows 电脑上的浏览器安全地“借给”远程 AI 使用，让 OpenClaw、OpenCode、Codex 这类 Agent 像坐在你电脑前一样打开网页、读取页面并执行操作。
+
+In plain English, it safely “lends” the browser on your Windows PC to a remote AI, so agents like OpenClaw, OpenCode, and Codex can open pages, read content, and perform browser actions as if they were sitting in front of your computer.
+
 Maintained by `bsbofmusic`.
 
 ## What it is
