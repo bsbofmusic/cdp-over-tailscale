@@ -47,10 +47,8 @@ const translations = {
     promptAsk1: '- 你最终采用的配置项名称',
     promptAsk2: '- 是否连接成功',
     promptAsk3: '- 如果失败，返回你实际尝试连接的完整地址',
-    copiedClaude: '已复制 Claude Prompt。',
     copiedPlaywright: '已复制 Playwright 代码片段。',
     copiedRaw: '已复制原始 CDP 地址。',
-    copyClaude: '复制 Claude Prompt',
     copyPlaywright: '复制 Playwright 代码',
     copyRaw: '复制原始 CDP 地址'
   },
@@ -88,10 +86,8 @@ const translations = {
     promptAsk1: '- the final config key or field you used',
     promptAsk2: '- whether the connection succeeded',
     promptAsk3: '- if it failed, the exact address you actually attempted',
-    copiedClaude: 'Claude prompt copied.',
     copiedPlaywright: 'Playwright snippet copied.',
     copiedRaw: 'Raw CDP URL copied.',
-    copyClaude: 'Copy Claude Prompt',
     copyPlaywright: 'Copy Playwright Snippet',
     copyRaw: 'Copy Raw CDP URL'
   }
@@ -112,6 +108,8 @@ let mainWindow = null;
 
 function buildGenericAgentPrompt(snapshot) {
   const language = snapshot.language ?? 'zh-CN';
+  const wsUrl = snapshot.wsEndpoint ?? '<WS endpoint unavailable>';
+  const httpUrl = snapshot.versionEndpoint ?? '<HTTP endpoint unavailable>';
   if (language === 'en-US') {
     return [
       'Background',
@@ -120,9 +118,9 @@ function buildGenericAgentPrompt(snapshot) {
       'Goal',
       'Connect to the existing bridge endpoint and use it as the only browser automation path.',
       '',
-      'Agent connection details',
-      `- WS endpoint: ${snapshot.wsEndpoint ?? '<unavailable>'}`,
-      `- HTTP discovery endpoint: ${snapshot.versionEndpoint ?? '<unavailable>'}`,
+      'Connection details',
+      `WS endpoint: ${wsUrl}`,
+      `HTTP discovery endpoint: ${httpUrl}`,
       '',
       'Rules',
       '- Do not use raw Chrome port 9222.',
@@ -131,15 +129,41 @@ function buildGenericAgentPrompt(snapshot) {
       '- Treat the bridge WS endpoint as the only browser connection address.',
       '',
       'Step-by-step',
-      '1. Verify that the bridge HTTP endpoint is reachable.',
-      '2. Configure the browser/CDP client to use the WS endpoint above.',
-      '3. Do not attempt any direct connection to localhost:9222 or any raw 9222 port.',
-      '4. Report the exact config field or command you used.',
-      '5. Report whether the connection succeeded.',
-      '6. If it failed, return the exact address you attempted.',
+      '1. Verify the bridge is reachable:',
+      `curl -s "${httpUrl}" --connect-timeout 5`,
+      'A successful response should contain fields like Browser and webSocketDebuggerUrl.',
+      '',
+      '2. Set the viewport on first connection:',
+      `agent-browser --cdp "${wsUrl}" set viewport 1920 1080`,
+      '',
+      '3. Open the target page:',
+      `agent-browser --cdp "${wsUrl}" open "https://example.com"`,
+      '',
+      '4. Verify the connection:',
+      `agent-browser --cdp "${wsUrl}" get url`,
+      `agent-browser --cdp "${wsUrl}" get title`,
+      '',
+      '5. Read the page structure:',
+      `agent-browser --cdp "${wsUrl}" snapshot`,
+      `agent-browser --cdp "${wsUrl}" get text 'body'`,
+      '',
+      '6. Optional screenshot:',
+      `agent-browser --cdp "${wsUrl}" screenshot`,
+      'Screenshot timeout does not necessarily mean the browser connection failed.',
+      '',
+      'Important notes',
+      '- Always include the full `--cdp` argument on every command.',
+      '- Do not rely on a saved cdpUrl in a config file for reconnects.',
+      '- Use `snapshot` instead of screenshots when you need structured understanding.',
       '',
       'OpenClaw-compatible media note',
-      'If local screenshots must later be attached to Discord, Telegram, Signal, or similar channels, use `MEDIA:./relative-path` and let the runtime convert and upload the local file automatically.'
+      'If local screenshots must later be attached to Discord, Telegram, Signal, or similar channels, use `MEDIA:./relative-path` and let the runtime convert and upload the local file automatically.',
+      '',
+      'Return requirements',
+      '- the exact command(s) you used, including `--cdp`',
+      '- whether the connection succeeded',
+      '- the current page URL and title',
+      '- if it failed, the exact attempted command and error output'
     ].join('\n');
   }
 
@@ -147,53 +171,57 @@ function buildGenericAgentPrompt(snapshot) {
     '背景',
     '你正在为一个远程 AI Agent 配置浏览器访问。目标浏览器运行在本地 Windows 机器上，并通过 Tailscale 保护的 CDP bridge 暴露出来。',
     '',
-    '目标',
-    '请连接到现有 bridge，并把它作为唯一的浏览器自动化入口。',
-    '',
-    '连接信息',
-    `- WS 地址：${snapshot.wsEndpoint ?? '<不可用>'}`,
-    `- HTTP 探测地址：${snapshot.versionEndpoint ?? '<不可用>'}`,
-    '',
-    '规则',
-    '- 不要使用原始 Chrome 9222 端口。',
-    '- 不要要求 `--remote-debugging-address=0.0.0.0`。',
-    '- 不要要求开放 Windows 防火墙的 9222。',
-    '- 只把 bridge 的 WS 地址当作浏览器连接入口。',
-    '',
-    '操作步骤',
-    '1. 先确认 bridge 的 HTTP 探测地址可访问。',
-    '2. 把浏览器/CDP 客户端配置到上面的 WS 地址。',
-    '3. 不要再尝试任何 localhost:9222 或其他裸 9222 直连。',
-    '4. 返回你最终使用的配置项名称或命令。',
-    '5. 返回是否连接成功。',
-    '6. 如果失败，返回你实际尝试连接的完整地址。',
-    '',
-    'OpenClaw 兼容语法糖',
-    '如果后续需要把本地截图发到 Discord、Telegram、Signal 等渠道，请使用 `MEDIA:./相对路径` 格式，runtime 会自动把本地图片转换成目标平台附件并上传。'
-  ].join('\n');
-}
-
-function buildClaudePrompt(snapshot) {
-  const language = snapshot.language ?? 'zh-CN';
-  if (language === 'en-US') {
-    return[
-      'Configure browser automation to use this local CDP bridge over Tailscale.',
+      '目标',
+      '请连接到现有 bridge，并把它作为唯一的浏览器自动化入口。',
       '',
-      `Bridge WS endpoint: ${snapshot.wsEndpoint ?? '<unavailable>'}`,
-      `Bridge HTTP endpoint: ${snapshot.versionEndpoint ?? '<unavailable>'}`,
+      '连接信息',
+      `WS 地址：${wsUrl}`,
+      `HTTP 探测地址：${httpUrl}`,
       '',
-      'Treat this as the only browser connection path. Do not connect to raw port 9222.'
+      '规则',
+      '- 不要使用原始 Chrome 9222 端口。',
+      '- 不要要求 `--remote-debugging-address=0.0.0.0`。',
+      '- 不要要求开放 Windows 防火墙的 9222。',
+      '- 只把 bridge 的 WS 地址当作浏览器连接入口。',
+      '',
+      '操作步骤',
+      '1. 验证 bridge 可达：',
+      `curl -s "${httpUrl}" --connect-timeout 5`,
+      '成功返回应该包含 Browser、webSocketDebuggerUrl 等 JSON 字段。',
+      '',
+      '2. 首次连接必须设置 viewport：',
+      `agent-browser --cdp "${wsUrl}" set viewport 1920 1080`,
+      '',
+      '3. 打开目标页面：',
+      `agent-browser --cdp "${wsUrl}" open "https://example.com"`,
+      '',
+      '4. 验证连接成功：',
+      `agent-browser --cdp "${wsUrl}" get url`,
+      `agent-browser --cdp "${wsUrl}" get title`,
+      '',
+      '5. 读取页面内容：',
+      `agent-browser --cdp "${wsUrl}" snapshot`,
+      `agent-browser --cdp "${wsUrl}" get text 'body'`,
+      '',
+      '6. 可选截图：',
+      `agent-browser --cdp "${wsUrl}" screenshot`,
+      '截图超时不代表连接失败。',
+      '',
+      'OpenClaw 兼容语法糖',
+      '如果后续需要把本地截图发到 Discord、Telegram、Signal 等渠道，请使用 `MEDIA:./相对路径` 格式，runtime 会自动把本地图片转换成目标平台附件并上传。',
+      '',
+      '关键注意事项',
+      '- 每次命令都要带完整的 `--cdp` 参数。',
+      '- 不要依赖配置文件里的 cdpUrl 来做重连。',
+      '- 首次连接先设置 viewport，避免页面变成窄条。',
+      '- 优先使用 `snapshot` 而不是截图来理解页面结构。',
+      '',
+      '返回信息要求',
+      '- 最终使用的完整命令（含 `--cdp` 参数）',
+      '- 是否连接成功',
+      '- 当前页面 URL 和标题',
+      '- 如果失败，返回实际尝试的完整命令和错误信息'
     ].join('\n');
-  }
-
-  return[
-    '请把浏览器自动化配置到这条本地 Tailscale CDP bridge。',
-    '',
-    `Bridge WS 地址：${snapshot.wsEndpoint ?? '<不可用>'}`,
-    `Bridge HTTP 地址：${snapshot.versionEndpoint ?? '<不可用>'}`,
-    '',
-    '请把它视为唯一浏览器连接方式，不要再尝试连接裸 9222。'
-  ].join('\n');
 }
 
 function buildPlaywrightSnippet(snapshot) {
@@ -239,8 +267,6 @@ function buildAgentPayload(kind, snapshot) {
   switch (kind) {
     case 'generic-agent':
       return { text: buildGenericAgentPrompt(snapshot), notice: t(snapshot.language ?? 'zh-CN', 'copiedPrompt') };
-    case 'claude':
-      return { text: buildClaudePrompt(snapshot), notice: t(snapshot.language ?? 'zh-CN', 'copiedClaude') };
     case 'playwright':
       return { text: buildPlaywrightSnippet(snapshot), notice: t(snapshot.language ?? 'zh-CN', 'copiedPlaywright') };
     case 'raw':
@@ -337,7 +363,6 @@ function buildTrayMenu(snapshot) {
     { label: snapshot.wsEndpoint ?? t(language, 'wsUnavailable'), click: () => void copyEndpoint('ws'), enabled: Boolean(snapshot.wsEndpoint) },
     { label: snapshot.versionEndpoint ?? t(language, 'httpUnavailable'), click: () => void copyEndpoint('http'), enabled: Boolean(snapshot.versionEndpoint) },
     { label: t(language, 'copyPrompt'), click: () => void copyAgentPayload('generic-agent'), enabled: Boolean(snapshot.wsEndpoint) },
-    { label: t(language, 'copyClaude'), click: () => void copyAgentPayload('claude'), enabled: Boolean(snapshot.wsEndpoint) },
     { label: t(language, 'copyPlaywright'), click: () => void copyAgentPayload('playwright'), enabled: Boolean(snapshot.wsEndpoint) },
     { label: t(language, 'copyRaw'), click: () => void copyAgentPayload('raw'), enabled: Boolean(snapshot.wsEndpoint) },
     { type: 'separator' },

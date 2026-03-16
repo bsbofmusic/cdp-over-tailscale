@@ -13,7 +13,6 @@ It is built for:
 - OpenClaw
 - OpenCode
 - Codex-style agent workflows
-- Claude Code-style agent workflows
 - Playwright `connectOverCDP`
 - Any generic CDP client
 
@@ -33,7 +32,7 @@ This project adds a safer local bridge layer:
 - Auto-detect and launch Chrome / Edge / Chromium
 - Tailscale-aware bridge endpoint generation
 - Windows tray app with taskbar and installer icons
-- Generic Agent Prompt for OpenClaw, OpenCode, Codex, and similar agents
+- Generic CDP Agent Prompt for OpenClaw, OpenCode, Codex, and similar agents
 - Playwright snippet and developer CDP URL output
 - Self-healing browser reconnect and bridge repair
 - Launch-on-login and minimize-to-tray controls
@@ -85,6 +84,8 @@ The primary output is a single generic prompt that explains:
 - bridge endpoints
 - rules
 - step-by-step connection flow
+
+The generated prompt includes runnable `agent-browser` examples with the current bridge URLs injected automatically.
 
 Use this first for most agents.
 

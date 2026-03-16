@@ -59,7 +59,6 @@ const strings = {
 
     // 接入 Prompt 文本补充完整，解决 undefined 问题
     copyPrompt: '复制通用 Agent Prompt',
-    copyClaude: '复制 Claude Prompt',
     copyPlaywright: '复制 Playwright 代码',
     copyRaw: '复制开发者 CDP 地址',
 
@@ -76,7 +75,6 @@ const strings = {
       refresh: '立即刷新浏览器、Tailscale 和桥接状态。',
       uninstall: '打开已安装版本的卸载程序，正规移除应用。',
       cleanInstall: '复制一段简短说明，告诉用户什么时候该使用 Clean install。',
-      claude: '复制适合 Claude Code 类 Agent 的接入说明。',
       playwright: '复制 Playwright connectOverCDP 代码片段。',
       raw: '复制 bridge 的底层 WS 地址，适合熟悉 CDP 的开发者调试使用。'
     }
@@ -133,7 +131,6 @@ const strings = {
 
     // Handoff Texts
     copyPrompt: 'Copy Generic Agent Prompt',
-    copyClaude: 'Copy Claude Prompt',
     copyPlaywright: 'Copy Playwright Snippet',
     copyRaw: 'Copy Developer CDP URL',
 
@@ -150,7 +147,6 @@ const strings = {
       refresh: 'Refresh browser, Tailscale, and bridge status now.',
       uninstall: 'Open the installed uninstaller for a clean removal.',
       cleanInstall: 'Copy a short explanation of when to use Clean install.',
-      claude: 'Copy a handoff for Claude Code-style agents.',
       playwright: 'Copy a Playwright connectOverCDP snippet.',
       raw: 'Copy the low-level bridge WS endpoint for CDP-capable developer tools.'
     }
@@ -224,7 +220,6 @@ function render(state) {
   `;
 
   developerRoot.innerHTML = `
-    <button data-action="copy-claude-prompt" title="${strings[language].buttonHints.claude}">${text('copyClaude', language)}</button>
     <button data-action="copy-playwright-snippet" title="${strings[language].buttonHints.playwright}">${text('copyPlaywright', language)}</button>
     <button data-action="copy-raw-cdp" title="${strings[language].buttonHints.raw}">${text('copyRaw', language)}</button>
     <div class="handoff-copy">${text('developerSummary', language)}</div>
@@ -274,9 +269,6 @@ document.addEventListener('click', async (event) => {
   }
   if (action === 'copy-openclaw-prompt') {
     await window.bridgeApp.invoke('bridge:copy-agent-payload', { kind: 'generic-agent' });
-  }
-  if (action === 'copy-claude-prompt') {
-    await window.bridgeApp.invoke('bridge:copy-agent-payload', { kind: 'claude' });
   }
   if (action === 'copy-playwright-snippet') {
     await window.bridgeApp.invoke('bridge:copy-agent-payload', { kind: 'playwright' });
