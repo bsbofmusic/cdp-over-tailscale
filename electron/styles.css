@@ -1,0 +1,123 @@
+body {
+  margin: 0;
+  font-family: "Segoe UI", sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+main {
+  padding: 16px;
+}
+
+.feedback {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #172554;
+  color: #dbeafe;
+}
+
+.feedback[data-state="error"] {
+  background: #7f1d1d;
+  color: #fee2e2;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+h1 {
+  margin: 0 0 6px;
+  font-size: 24px;
+}
+
+p {
+  margin: 0;
+  color: #94a3b8;
+}
+
+.toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.status-pill {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.status-running {
+  background: #14532d;
+}
+
+.status-error,
+.status-repairing {
+  background: #7f1d1d;
+}
+
+.status-starting,
+.status-restarting,
+.status-rotating-token {
+  background: #1d4ed8;
+}
+
+.status-stopped,
+.status-idle {
+  background: #334155;
+}
+
+.status-grid,
+.diagnostics {
+  display: grid;
+  gap: 8px;
+}
+
+.status-grid div,
+.diagnostics div {
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.button-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 16px 0;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  background: #2563eb;
+  color: white;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #1d4ed8;
+}
+
+strong {
+  color: #93c5fd;
+}
+
+span {
+  text-align: right;
+  word-break: break-all;
+}

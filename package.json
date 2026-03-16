@@ -1,0 +1,68 @@
+{
+  "name": "cdp-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local CDP bridge for Tailscale-accessible OpenClaw sessions",
+  "author": "bsbofmusic",
+  "main": "electron/main.js",
+  "bin": {
+    "cdp-bridge": "src/cli.js"
+  },
+  "scripts": {
+    "start": "electron .",
+    "start:bridge": "node src/cli.js",
+    "check": "node --check src/cli.js && node --check src/server.js && node --check src/chrome.js && node --check src/config.js && node --check src/tailscale.js && node --check src/logger.js && node --check src/bridge-service.js && node --check src/supervisor.js && node --check electron/main.js && node --check electron/preload.cjs && node --check electron/renderer.js",
+    "pack:win": "electron-builder --dir --win nsis --x64",
+    "dist:win": "electron-builder --win nsis --x64"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "electron": "^35.0.1",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "ai.cosymart.cdpbridge",
+    "productName": "CDP Bridge",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "package.json",
+      "README.md"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.js"
+    },
+    "artifactName": "${productName}-Setup-${version}.${ext}",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
+      "shortcutName": "CDP Bridge",
+      "installerLanguages": [
+        "en_US",
+        "zh_CN"
+      ]
+    }
+  }
+}
