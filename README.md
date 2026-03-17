@@ -8,6 +8,21 @@ In plain English, it safely “lends” the browser on your Windows PC to a remo
 
 Maintained by `bsbofmusic`.
 
+## README update policy
+
+- Last updated: `2026-03-17`
+- Latest documented update:
+  - version bumped to `0.2.0`
+  - unified Generic CDP Agent Prompt
+  - moved low-level tools into the Developer section
+  - clarified `MEDIA:./relative-path` support for OpenClaw-compatible runtimes
+  - clarified self-heal browser relaunch behavior
+
+Future README updates should always include:
+
+- the latest update date
+- a short bullet list of what changed
+
 ## What it is
 
 Agent Browser Bridge keeps a local browser available for remote agent workflows without exposing raw Chrome port `9222`.
@@ -62,7 +77,7 @@ npm run dist:win
 
 Installer output:
 
-- `dist/CDP Bridge-Setup-0.1.0.exe`
+- `dist/CDP Bridge-Setup-0.2.0.exe`
 
 ## First run
 
@@ -78,6 +93,22 @@ Installer output:
 - **Agent Handoff**: the main end-user handoff area
 - **Developer**: Playwright and low-level CDP outputs
 - **Maintenance**: uninstall and clean install guidance
+
+## Browser and page modes
+
+The app exposes two practical runtime modes:
+
+- **Browser Mode**
+  - `Clean Mode`: isolated profile, best stability, does not reuse existing logins or extensions
+  - `Advanced Mode`: use when the workflow needs existing logins, cookies, or extensions
+- **Page Mode**
+  - `Desktop Mode`: landscape `1920×1080`
+  - `Mobile Mode`: portrait `1080×1920`
+
+If you are unsure, start with:
+
+- `Clean Mode`
+- `Desktop Mode`
 
 ## Generic Agent Prompt
 
