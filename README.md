@@ -141,6 +141,53 @@
 - Playwright `connectOverCDP`
 - 原始开发者 CDP 地址
 
+### 远程拉起浏览器
+
+从 `0.2.1` 开始，远端 Agent 不再只能“被动等待本地先启动”。
+
+如果 bridge 已在线，但本地浏览器还没有准备好，远端可以先调用远程启动接口，再连接 CDP。
+
+接口格式：
+
+```text
+http://<tailscale-ip>:<bridge-port>/control/start?token=<token>&mode=<clean|advanced>
+```
+
+如果是高级模式，还可以附带 profile：
+
+```text
+http://<tailscale-ip>:<bridge-port>/control/start?token=<token>&mode=advanced&profile=Default
+```
+
+典型用法：
+
+```bash
+curl -X POST "http://100.121.130.36:39222/control/start?token=YOUR_TOKEN&mode=clean"
+curl -X POST "http://100.121.130.36:39222/control/start?token=YOUR_TOKEN&mode=advanced&profile=Default"
+```
+
+远端推荐流程：
+
+1. 先调用 `/control/start`
+2. 再轮询 `/json/version?token=...`
+3. 等返回 `webSocketDebuggerUrl`
+4. 再正式连接 bridge WS 地址
+
+### 远端 Agent 标准指令模板
+
+如果你想让远端 Agent 自己决定并拉起当前浏览器，可以直接把下面这段思路给它：
+
+```text
+先检查 bridge HTTP version endpoint 是否可用。
+
+如果返回 503，先调用远程启动接口：
+- 需要干净模式时，调用 /control/start?mode=clean
+- 需要高级模式时，调用 /control/start?mode=advanced&profile=Default
+
+启动成功后，继续轮询 /json/version?token=...
+只有在拿到 webSocketDebuggerUrl 后，才开始真正执行 CDP / Playwright 操作。
+```
+
 ### 清洁重装
 
 如果出现以下情况，建议使用安装器里的 `Clean reinstall`：
@@ -343,6 +390,53 @@ Developers can also use:
 
 - Playwright `connectOverCDP`
 - the raw developer CDP URL
+
+### Remote Browser Startup
+
+Starting from `0.2.1`, a remote agent no longer has to wait for the local user to manually start the browser first.
+
+If the bridge itself is reachable but local CDP is not ready yet, the remote side can call a control endpoint to start the requested browser mode.
+
+Endpoint format:
+
+```text
+http://<tailscale-ip>:<bridge-port>/control/start?token=<token>&mode=<clean|advanced>
+```
+
+Advanced Mode can also specify a profile:
+
+```text
+http://<tailscale-ip>:<bridge-port>/control/start?token=<token>&mode=advanced&profile=Default
+```
+
+Typical usage:
+
+```bash
+curl -X POST "http://100.121.130.36:39222/control/start?token=YOUR_TOKEN&mode=clean"
+curl -X POST "http://100.121.130.36:39222/control/start?token=YOUR_TOKEN&mode=advanced&profile=Default"
+```
+
+Recommended remote flow:
+
+1. call `/control/start`
+2. poll `/json/version?token=...`
+3. wait until `webSocketDebuggerUrl` is returned
+4. then start the real CDP / Playwright session
+
+### Standard Remote Agent Prompt Logic
+
+If you want the remote agent to decide and start the browser by itself, use this logic:
+
+```text
+Check the bridge HTTP version endpoint first.
+
+If it returns 503, call the remote start endpoint first:
+- use /control/start?mode=clean when you need Clean Mode
+- use /control/start?mode=advanced&profile=Default when you need Advanced Mode
+
+After that, keep polling /json/version?token=...
+Only begin real CDP / Playwright actions after webSocketDebuggerUrl is available.
+```
 
 ### Clean Reinstall
 
