@@ -109,6 +109,7 @@ function buildGenericAgentPrompt(snapshot) {
   const language = snapshot.language ?? 'zh-CN';
   const wsUrl = snapshot.wsEndpoint ?? '<WS endpoint unavailable>';
   const httpUrl = snapshot.versionEndpoint ?? '<HTTP endpoint unavailable>';
+  const controlBase = snapshot.controlStartBase ?? '<Control start endpoint unavailable>';
   const browserModeLine = snapshot.browserMode === 'advanced'
     ? (language === 'en-US' ? 'Current browser mode: Advanced Mode (builds a high-compat managed replica of the selected Chrome user, then launches that replica with CDP enabled).' : '当前浏览器模式：高级模式（会为所选 Chrome 用户创建高兼容受管副本，并以启用 CDP 的方式拉起该副本）。')
     : (language === 'en-US' ? 'Current browser mode: Clean Mode (isolated profile, best stability, does not reuse existing logins or extensions).' : '当前浏览器模式：干净模式（隔离 profile，稳定优先，不继承已有登录态和扩展）。');
@@ -147,7 +148,9 @@ function buildGenericAgentPrompt(snapshot) {
       `curl -s "${httpUrl}" --connect-timeout 5`,
       'A successful response should contain Browser and webSocketDebuggerUrl.',
       '',
-      '2. Connect directly first and keep the current mode selected by the desktop app.',
+      '2. If the bridge reports CDP unavailable, start the mode you need first:',
+      `curl -X POST "${controlBase}&mode=clean"`,
+      `curl -X POST "${controlBase}&mode=advanced&profile=${snapshot.advancedProfileDirectory || 'Default'}"`,
       '',
       '3. Only set viewport if the layout is clearly wrong:',
       viewportCommand,
@@ -204,7 +207,9 @@ function buildGenericAgentPrompt(snapshot) {
     `curl -s "${httpUrl}" --connect-timeout 5`,
     '成功返回应包含 Browser、webSocketDebuggerUrl。',
     '',
-    '2. 先直接连接，默认沿用桌面程序当前选好的模式。',
+    '2. 如果 bridge 提示 CDP 不可用，先远程拉起你需要的模式：',
+    `curl -X POST "${controlBase}&mode=clean"`,
+    `curl -X POST "${controlBase}&mode=advanced&profile=${snapshot.advancedProfileDirectory || 'Default'}"`,
     '',
     '3. 只有页面明显变窄或布局不对时，再补执行 viewport：',
     viewportCommand,

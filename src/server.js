@@ -21,6 +21,24 @@ async function getBridgeMetadata(config) {
   };
 }
 
+function parseControlOptions(parsedUrl) {
+  return {
+    mode: parsedUrl.searchParams.get('mode') || undefined,
+    profile: parsedUrl.searchParams.get('profile') || undefined,
+    device: parsedUrl.searchParams.get('device') || undefined,
+  };
+}
+
+function bridgeUnavailablePayload(config, error) {
+  return {
+    ok: false,
+    error: 'Local browser CDP is not ready',
+    detail: error.message,
+    hint: 'Start the selected browser mode locally and wait until the app shows CDP available.',
+    chromeDebugPort: config.chromeDebugPort,
+  };
+}
+
 function json(response, statusCode, payload) {
   response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8' });
   response.end(JSON.stringify(payload, null, 2));
@@ -31,7 +49,7 @@ function isAuthorized(request, token) {
   return parsed.searchParams.get('token') === token;
 }
 
-export async function startBridgeServer(config) {
+export async function startBridgeServer(config, controls = {}) {
   const server = http.createServer(async (request, response) => {
     const parsed = new URL(request.url, 'http://127.0.0.1');
 
@@ -55,7 +73,7 @@ export async function startBridgeServer(config) {
           }
         });
       } catch (error) {
-        return json(response, 500, { ok: false, error: error.message });
+        return json(response, 503, bridgeUnavailablePayload(config, error));
       }
     }
 
@@ -69,6 +87,30 @@ export async function startBridgeServer(config) {
         return json(response, 200, {
           ...metadata.versionInfo,
           webSocketDebuggerUrl: metadata.wsUrl
+        });
+      } catch (error) {
+        return json(response, 503, bridgeUnavailablePayload(config, error));
+      }
+    }
+
+    if (parsed.pathname === '/control/start') {
+      if (!isAuthorized(request, config.token)) {
+        return json(response, 401, { ok: false, error: 'Unauthorized' });
+      }
+      if (!controls.start) {
+        return json(response, 501, { ok: false, error: 'Remote start is not available' });
+      }
+
+      try {
+        const snapshot = await controls.start(parseControlOptions(parsed));
+        return json(response, 200, {
+          ok: true,
+          mode: snapshot.browserMode,
+          profile: snapshot.advancedProfileDirectory ?? 'Default',
+          wsEndpoint: snapshot.wsEndpoint,
+          versionEndpoint: snapshot.versionEndpoint,
+          cdpState: snapshot.cdpState,
+          phase: snapshot.phase,
         });
       } catch (error) {
         return json(response, 500, { ok: false, error: error.message });

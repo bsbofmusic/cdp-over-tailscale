@@ -50,6 +50,36 @@ export function createBridgeService() {
   let serverHandle = null;
   const advancedProfileManager = createAdvancedProfileManager();
 
+  async function ensureServerStarted() {
+    if (serverHandle) {
+      return;
+    }
+
+    currentConfig = await reserveBridgePort(loadConfig());
+    serverHandle = await startBridgeServer(currentConfig, {
+      start: async (options = {}) => activateFromRemote(options)
+    });
+  }
+
+  async function activateFromRemote(options = {}) {
+    currentConfig = saveConfig({
+      ...loadConfig(),
+      ...(options.mode ? { browserMode: options.mode === 'advanced' ? 'advanced' : 'clean' } : {}),
+      ...(options.profile ? { advancedProfileDirectory: options.profile } : {}),
+      ...(options.device ? { deviceMode: options.device === 'mobile' ? 'mobile' : 'desktop' } : {}),
+    });
+
+    await stopManagedBrowsers(currentConfig);
+
+    let advancedLaunchContext = advancedProfileManager.getLaunchContext(currentConfig);
+    if (currentConfig.browserMode === 'advanced' && !advancedLaunchContext) {
+      advancedLaunchContext = await advancedProfileManager.ensureReplica(currentConfig, null);
+    }
+
+    await ensureChrome(currentConfig, advancedLaunchContext, null);
+    return buildSnapshot();
+  }
+
   async function buildSnapshot() {
     currentConfig = loadConfig();
     const preferredBrowser = detectPreferredBrowser(currentConfig.chromePath);
@@ -86,6 +116,7 @@ export function createBridgeService() {
       logDir: currentConfig.logDir,
       wsEndpoint: `ws://${baseHost}:${currentConfig.bridgePort}/devtools/browser?token=${currentConfig.token}`,
       versionEndpoint: `http://${baseHost}:${currentConfig.bridgePort}/json/version?token=${currentConfig.token}`
+      ,controlStartBase: `http://${baseHost}:${currentConfig.bridgePort}/control/start?token=${currentConfig.token}`
     };
 
     if (!chromeReachable) {
@@ -108,6 +139,7 @@ export function createBridgeService() {
       }
 
       currentConfig = await reserveBridgePort(loadConfig());
+      await ensureServerStarted();
       let advancedLaunchContext = advancedProfileManager.getLaunchContext(currentConfig);
       if (currentConfig.browserMode === 'advanced') {
         if (!advancedLaunchContext) {
@@ -120,7 +152,6 @@ export function createBridgeService() {
       }
       onProgress?.({ stage: 'starting-bridge', percent: 90, detail: String(currentConfig.bridgePort) });
       await ensureChrome(currentConfig, advancedLaunchContext, onProgress);
-      serverHandle = await startBridgeServer(currentConfig);
       onProgress?.({ stage: 'starting-bridge', percent: 98, detail: String(currentConfig.bridgePort) });
       return buildSnapshot();
     },
@@ -154,6 +185,7 @@ export function createBridgeService() {
       return buildSnapshot();
     },
     async getStatus() {
+      await ensureServerStarted();
       return buildSnapshot();
     },
     getConfig() {
@@ -169,6 +201,7 @@ export function createBridgeService() {
       await stopManagedBrowsers(currentConfig);
       await this.stop();
       advancedProfileManager.invalidateReplica(currentConfig);
+      await ensureServerStarted();
       return buildSnapshot();
     }
   };

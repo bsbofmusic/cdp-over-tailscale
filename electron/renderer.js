@@ -48,6 +48,7 @@ const strings = {
     repairs: '修复次数',
     ws: 'WS 地址',
     http: 'HTTP 地址',
+    control: '远程启动',
     config: '配置目录',
     logs: '日志目录',
     installPath: '安装路径',
@@ -169,6 +170,7 @@ const strings = {
     repairs: 'Repairs',
     ws: 'WS Endpoint',
     http: 'HTTP Endpoint',
+    control: 'Remote Start',
     config: 'Config',
     logs: 'Logs',
     installPath: 'Install Path',
@@ -443,6 +445,7 @@ function render(state) {
   diagnosticsRoot.innerHTML = `
     <div><strong>${text('ws', language)}</strong><span>${state.wsEndpoint ?? text('unavailable', language)}</span></div>
     <div><strong>${text('http', language)}</strong><span>${state.versionEndpoint ?? text('unavailable', language)}</span></div>
+    <div><strong>${text('control', language)}</strong><span>${state.controlStartBase ?? text('unavailable', language)}</span></div>
     <div><strong>${text('appVersion', language)}</strong><span>${state.appVersion ?? state.packageVersion ?? text('unavailable', language)}</span></div>
     <div><strong>${text('installPath', language)}</strong><span>${state.installPath ?? text('unavailable', language)}</span></div>
     <div><strong>${text('mode', language)}</strong><span>${browserModeSummary} / ${deviceModeSummary}</span></div>

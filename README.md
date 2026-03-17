@@ -17,7 +17,7 @@
 
 ### 当前版本
 
-- 版本：`0.2.0`
+- 版本：`0.2.1`
 - 最近更新：`2026-03-17`
 - 本版重点：
   - 高级模式改为“高兼容受管副本”
@@ -191,7 +191,7 @@ npm run dist:win
 
 输出文件：
 
-- `dist/CDP Bridge-Setup-0.2.0.exe`
+- `dist/CDP Bridge-Setup-0.2.1.exe`
 
 ### 项目结构
 
@@ -219,7 +219,7 @@ Maintained by `bsbofmusic`.
 
 ### Current Release
 
-- Version: `0.2.0`
+- Version: `0.2.1`
 - Last updated: `2026-03-17`
 - This release focuses on:
   - rebuilding Advanced Mode as a high-compat managed replica
@@ -394,7 +394,7 @@ npm run dist:win
 
 Installer output:
 
-- `dist/CDP Bridge-Setup-0.2.0.exe`
+- `dist/CDP Bridge-Setup-0.2.1.exe`
 
 ### Project Structure
 
