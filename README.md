@@ -1,4 +1,12 @@
-# CDP Bridge
+# 🌉 Tailscale CDP Bridge for Agents
+
+**A Windows tray app that lets remote agents start and use your local browser through a Tailscale-secured CDP bridge.**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE) [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-blue.svg)](#) [![Electron](https://img.shields.io/badge/Electron-35.x-47848f.svg)](https://www.electronjs.org/) [![Version](https://img.shields.io/badge/Version-0.2.1-green.svg)](./docs/RELEASE_NOTES_0_2_1.md)
+
+*Remote browser startup · Tailscale private access · Clean mode · Advanced replica mode · Agent-friendly CDP handoff*
+
+---
 
 - [中文](#中文)
 - [English](#english)
@@ -7,117 +15,108 @@
 
 ## 中文
 
-### 项目简介
+### 它解决什么问题
 
-`CDP Bridge` 是一个 Windows 本地浏览器桥接工具，用来把你电脑上的 Chrome 系浏览器，通过 Tailscale 和受控 CDP Bridge 安全提供给远程 Agent 使用。
+> “我想让远端 Agent 直接使用我这台 Windows 电脑上的浏览器。”  
+> “我不想暴露原始 9222，也不想改一堆防火墙和 Chrome 调试参数。”  
+> “我想要干净模式，也想要一个可以长期复用的高级副本模式。”
+
+这个项目把本地浏览器包装成一个**可控、可远程拉起、可通过 Tailscale 私有访问**的 CDP Bridge。
 
 简单说，它能把你这台 Windows 电脑上的浏览器安全地“借给”远程 AI 使用，让 OpenClaw、OpenCode、Codex 这类 Agent 像坐在你电脑前一样打开网页、读取页面并执行操作。
 
 维护者：`bsbofmusic`
 
-### 当前版本
+### 核心特性
 
-- 版本：`0.2.1`
-- 最近更新：`2026-03-17`
-- 本版重点：
-  - 高级模式改为“高兼容受管副本”
-  - 高级副本默认持久化复用，不再自动覆盖
-  - 新增“重置高级模式副本”入口
-  - 主路径收敛为“先选模式，再点一键启动”
-  - 清洁重装继续保留并修正
-
-### 这是什么
-
-它不是直接把 Chrome 的 `9222` 暴露到公网或局域网。
-
-它做的是：
-
-- 浏览器继续留在你的 Windows 本机
-- Tailscale 提供私有网络可达性
-- CDP Bridge 暴露带 token 的受控连接地址
-- Windows 托盘程序负责本地浏览器拉起、状态展示、Prompt 生成和安装维护
-
-### 主要特性
-
-- 支持 Chrome / Edge / Chromium 探测与拉起
-- 支持 Tailscale 状态检测与 bridge 地址生成
-- 支持 `Clean Mode` 与 `Advanced Mode`
-- 支持通用 Agent Prompt、Playwright 代码、开发者 CDP 地址复制
-- 支持清洁重装与卸载入口
-- 支持高级模式副本持久化和手动重置
+- Windows 托盘常驻，随时可拉起本地浏览器
+- 通过 Tailscale 暴露私有 bridge 地址，不暴露原始 `9222`
+- 支持 `干净模式` 与 `高级模式`
+- 支持远端 Agent 自主调用 `/control/start` 拉起浏览器
+- 支持通用 Agent Prompt、Playwright 代码片段、开发者 CDP 地址复制
+- 支持 `重置高级模式副本`
+- 支持清洁重装与安装版恢复
 
 ### 模式说明
 
-#### 浏览器模式
+#### `干净模式`
 
-- `干净模式`
-  - 使用独立干净 profile
-  - 稳定优先
-  - 不继承原生浏览器登录态和扩展
+- 使用隔离的独立 profile
+- 启动快，稳定优先
+- 不继承原生浏览器登录态和扩展
+- 适合自动化、调试、临时任务
 
-- `高级模式`
-  - 为所选 Chrome 用户创建一个独立且可持久复用的浏览器副本
-  - 默认不再重度复制原生浏览器数据
-  - 更适合在副本里自行登录账号并让浏览器自己同步插件、书签、历史等资料
-  - 使用非默认 `user-data-dir`，保证 Chrome 在新版本安全策略下仍可开启 CDP
+#### `高级模式`
 
-#### 页面模式
+- 创建一个**独立且可持久复用**的浏览器副本
+- 默认不再重度复制原生浏览器数据
+- 更适合在副本里自行登录账号，然后让浏览器自己同步书签、扩展、历史等资料
+- 适合长期养熟一个“Agent 专用副本”
 
-- `电脑模式`：`1920x1080`
-- `手机模式`：`1080x1920`
+### 工作方式
 
-### 推荐使用流程
+```
+Remote Agent
+    │
+    ├── Tailscale private network
+    │
+    └── CDP Bridge (Windows tray app)
+          │
+          ├── /control/start?mode=clean
+          ├── /control/start?mode=advanced&profile=Default
+          ├── /json/version?token=...
+          └── /devtools/browser?token=...
+                │
+                ▼
+             Local Chrome / Edge / Chromium
+```
 
-#### 首次使用
+### 快速开始
+
+#### 1. 安装与启动
 
 1. 在本机安装并登录 Tailscale。
-2. 启动 `CDP Bridge`。
-3. 先选择浏览器模式：
-   - 不需要登录态时选 `干净模式`
-   - 需要尽量继承插件和登录态时选 `高级模式`
-4. 如果是高级模式，再选择要复制的 Chrome 用户。
-5. 点击 `一键启动`。
-6. 把 `通用 Agent Prompt` 发给远程 Agent。
+2. 安装 `CDP Bridge`。
+3. 启动软件，让它常驻托盘。
+4. 在界面中选择：
+   - 浏览器模式
+   - 页面模式
+   - 高级模式下的 Chrome 用户
+5. 点击 `一键启动`，或让远端 Agent 通过 `/control/start` 远程拉起。
 
-#### 高级模式的真实行为
+#### 2. 远端 Agent 使用
 
-高级模式不是直接接管原生 Chrome 默认用户目录，而是：
+先检查 bridge：
 
-1. 以所选 Chrome 用户名创建一个独立副本目录
-2. 用这个副本拉起支持 CDP 的浏览器
-3. 后续在这个副本里自行登录账号并持续复用
+```bash
+curl -s "http://<tailscale-ip>:<bridge-port>/json/version?token=<token>" --connect-timeout 5
+```
 
-这样做的原因是：新版 Chrome 不允许对默认真实用户目录稳定开启 remote debugging，而重度复制原生数据又太慢太重。
+如果本地浏览器还没准备好，可远程拉起：
 
-#### 高级模式登录建议
+```bash
+curl -X POST "http://<tailscale-ip>:<bridge-port>/control/start?token=<token>&mode=clean"
+curl -X POST "http://<tailscale-ip>:<bridge-port>/control/start?token=<token>&mode=advanced&profile=Default"
+```
+
+成功后再连接 bridge WS 地址。
+
+### 高级模式建议
 
 高级模式副本是**长期持久化**的。
 
-推荐这样理解：
+推荐做法：
 
-- 第一次进入高级模式时，它更像一个“干净但独立”的浏览器副本
-- 你在里面完成一次登录、二次验证后
-- 浏览器会以这个副本身份继续同步你的账号资料、插件、书签和历史记录
-- 之后不要随便重置这个副本
-- 以后再次进入高级模式，会继续复用这个已经养熟的副本
+- 第一次进入高级模式时，把它当成一个新的独立浏览器
+- 在里面完成登录、二次验证、必要授权
+- 然后持续复用这个副本
+- 不要频繁重置，除非你明确想重来
 
-如果 Gmail 或部分高风控站点第一次仍要求验证身份，这是正常现象。通常在副本里验证一次后，后续复用会更稳定。
-
-### 一键启动与模式切换
-
-当前交互逻辑是：
-
-- 选择模式、选择 Chrome 用户、选择页面模式：**只保存配置**
-- 点击 `一键启动`：**真正按当前模式启动浏览器和 bridge**
-
-也就是说：
-
-- 切换模式本身不会自动重启浏览器
-- 只有点击 `一键启动` 才会真正执行当前模式
+如果第一次登录 Gmail 或高风控站点仍要求验证身份，这是正常现象。关键是后续继续复用同一个副本，而不是反复重建。
 
 ### 开发者区
 
-开发者区目前提供：
+开发者区包含：
 
 - `复制 Playwright 代码`
 - `复制开发者 CDP 地址`
@@ -125,97 +124,32 @@
 
 其中：
 
-- `重置高级模式副本` 的作用是删除当前高级模式副本
-- 删除后，下次你再选择高级模式并点击 `一键启动`，程序会重新创建一个新的副本
+- `重置高级模式副本` 会删除当前高级副本
+- 下次选择高级模式并点击 `一键启动` 时，会重新创建新的副本
 
-只有在你想彻底重来时，才建议点这个按钮。
+### 通用 Agent Prompt
 
-### Agent 接入
+主推荐接入方式是点击：
 
-主推荐方式是：
+- `复制通用 Agent Prompt`
 
-- 使用界面的 `复制通用 Agent Prompt`
+这段 prompt 已经包含：
 
-它会自动把当前 bridge 地址、模式背景、连接规则和约束一起整理好，交给 Agent 使用。
-
-开发者如果需要低层方式，也可以使用：
-
-- Playwright `connectOverCDP`
-- 原始开发者 CDP 地址
-
-### 远程拉起浏览器
-
-从 `0.2.1` 开始，远端 Agent 不再只能“被动等待本地先启动”。
-
-如果 bridge 已在线，但本地浏览器还没有准备好，远端可以先调用远程启动接口，再连接 CDP。
-
-接口格式：
-
-```text
-http://<tailscale-ip>:<bridge-port>/control/start?token=<token>&mode=<clean|advanced>
-```
-
-如果是高级模式，还可以附带 profile：
-
-```text
-http://<tailscale-ip>:<bridge-port>/control/start?token=<token>&mode=advanced&profile=Default
-```
-
-典型用法：
-
-```bash
-curl -X POST "http://100.121.130.36:39222/control/start?token=YOUR_TOKEN&mode=clean"
-curl -X POST "http://100.121.130.36:39222/control/start?token=YOUR_TOKEN&mode=advanced&profile=Default"
-```
-
-远端推荐流程：
-
-1. 先调用 `/control/start`
-2. 再轮询 `/json/version?token=...`
-3. 等返回 `webSocketDebuggerUrl`
-4. 再正式连接 bridge WS 地址
-
-只要本地托盘程序常驻后台、bridge 服务仍然在线，远端 Agent 就可以按需自主拉起：
-
-- `干净模式`
-- `高级模式`
-
-也就是说，远端不必每次都等本地手动点启动。
-
-### 远端 Agent 标准指令模板
-
-如果你想让远端 Agent 自己决定并拉起当前浏览器，可以直接把下面这段思路给它：
-
-```text
-先检查 bridge HTTP version endpoint 是否可用。
-
-如果已经返回 Browser 和 webSocketDebuggerUrl，就直接连接。
-
-如果返回 503，或者提示本地 CDP 未就绪：
-- 需要干净模式时，调用 /control/start?mode=clean
-- 需要高级模式时，调用 /control/start?mode=advanced&profile=Default
-
-远程启动后，继续轮询 /json/version?token=...
-只有在拿到 webSocketDebuggerUrl 后，才开始真正执行 CDP / Playwright 操作。
-```
+- bridge 地址
+- 远程启动逻辑
+- `clean` / `advanced` 模式选择方式
+- WS 连接规则
+- 失败时的返回要求
 
 ### 清洁重装
 
-如果出现以下情况，建议使用安装器里的 `Clean reinstall`：
+如果安装版行为异常、旧版本残留、托盘劫持或本地状态损坏，使用安装器中的：
 
-- 旧安装版残留
-- 托盘进程劫持新版本
-- 本地状态损坏
-- 安装后看起来还是旧逻辑
+- `Clean reinstall`
 
-它会尝试：
+它会尝试清理旧安装、旧进程、旧用户态数据和快捷方式。
 
-- 停止旧进程
-- 调用卸载器清理旧版本
-- 删除本地运行数据和更新器残留
-- 删除快捷方式和旧安装目录
-
-### 构建与开发
+### 本地开发
 
 安装依赖：
 
@@ -223,16 +157,10 @@ curl -X POST "http://100.121.130.36:39222/control/start?token=YOUR_TOKEN&mode=ad
 npm install
 ```
 
-本地运行：
+运行：
 
 ```bash
 npm start
-```
-
-只跑 bridge：
-
-```bash
-npm run start:bridge
 ```
 
 语法检查：
@@ -241,7 +169,7 @@ npm run start:bridge
 npm run check
 ```
 
-构建 Windows 安装包：
+打包 Windows 安装器：
 
 ```bash
 npm run dist:win
@@ -249,234 +177,146 @@ npm run dist:win
 
 输出文件：
 
-- `dist/CDP Bridge-Setup-0.2.1.exe`
-
-### 项目结构
-
-- `electron/`：桌面壳、托盘、主窗口、渲染层
-- `src/`：bridge 核心、浏览器管理、配置、状态机
-- `build/`：NSIS 安装器定制
-- `scripts/`：本地辅助脚本
-- `docs/`：产品与验证文档
-
-### 许可证
-
-MIT
+```text
+dist/CDP Bridge-Setup-0.2.1.exe
+```
 
 ---
 
 ## English
 
-### Overview
+### What This Solves
 
-`CDP Bridge` is a Windows local browser bridge that safely exposes a Chrome-family browser to remote agents through Tailscale and a controlled CDP bridge.
+> “I want a remote agent to use the browser on my Windows machine.”  
+> “I do not want to expose raw port 9222 or manually tweak firewall and Chrome flags.”  
+> “I want both a clean isolated mode and a long-lived advanced browser replica.”
+
+This project turns your local browser into a **controlled, remotely startable, Tailscale-secured CDP bridge**.
 
 In plain English, it safely “lends” the browser on your Windows PC to a remote AI, so agents like OpenClaw, OpenCode, and Codex can open pages, read content, and perform browser actions as if they were sitting in front of your computer.
 
 Maintained by `bsbofmusic`.
 
-### Current Release
+### Core Features
 
-- Version: `0.2.1`
-- Last updated: `2026-03-17`
-- This release focuses on:
-  - rebuilding Advanced Mode as a high-compat managed replica
-  - keeping the Advanced replica persistent by default
-  - adding a manual “Reset Advanced Replica” action
-  - simplifying the main flow to “choose mode, then click Start CDP”
-  - retaining the clean reinstall workflow
-
-### What It Does
-
-This project does **not** directly expose Chrome port `9222` to the public internet or a LAN.
-
-Instead, it provides a safer local bridge layer:
-
-- the browser remains on your Windows machine
-- Tailscale provides private network reachability
-- CDP Bridge exposes a tokenized endpoint
-- the desktop app handles local startup, diagnostics, prompts, and packaging
-
-### Key Features
-
-- detects and launches Chrome / Edge / Chromium
-- generates Tailscale-aware bridge endpoints
-- supports `Clean Mode` and `Advanced Mode`
-- provides a generic agent prompt, Playwright snippet, and raw developer CDP URL
-- includes clean reinstall and uninstall tools
-- keeps the Advanced replica persistent and resettable
+- Windows tray app that keeps the bridge available in the background
+- Tailscale private-network access instead of exposing raw `9222`
+- `Clean Mode` and `Advanced Mode`
+- Remote browser startup through `/control/start`
+- Generic Agent Prompt, Playwright snippet, and raw developer CDP URL
+- `Reset Advanced Replica` support
+- Clean reinstall recovery for broken packaged installs
 
 ### Modes
 
-#### Browser Mode
+#### `Clean Mode`
 
-- `Clean Mode`
-  - uses an isolated browser profile
-  - best for stability
-  - does not reuse your existing logins or extensions
+- uses an isolated standalone profile
+- starts fast and favors stability
+- does not reuse your native browser login state or extensions
+- best for automation and short-lived tasks
 
-- `Advanced Mode`
-  - creates a standalone persistent browser replica using the selected Chrome user name
-  - avoids a heavy full-data copy by default
-  - works best when you sign in directly inside the replica and let Chrome sync data by itself over time
-  - uses a non-default `user-data-dir` so CDP remains available under modern Chrome security rules
+#### `Advanced Mode`
 
-#### Page Mode
+- creates a **standalone persistent browser replica**
+- no longer performs a heavy full clone of native browser data by default
+- works best when you sign in directly inside the replica and let the browser sync bookmarks, extensions, and history on its own
+- ideal for building a long-lived “agent browser” over time
 
-- `Desktop Mode`: `1920x1080`
-- `Mobile Mode`: `1080x1920`
+### How It Works
 
-### Recommended Workflow
+```text
+Remote Agent
+    │
+    ├── Tailscale private network
+    │
+    └── CDP Bridge (Windows tray app)
+          │
+          ├── /control/start?mode=clean
+          ├── /control/start?mode=advanced&profile=Default
+          ├── /json/version?token=...
+          └── /devtools/browser?token=...
+                │
+                ▼
+             Local Chrome / Edge / Chromium
+```
 
-#### First Run
+### Quick Start
+
+#### 1. Install and Run
 
 1. Install and sign in to Tailscale on the local Windows machine.
-2. Launch `CDP Bridge`.
-3. Choose the browser mode:
-   - use `Clean Mode` when you do not need an existing login state
-   - use `Advanced Mode` when you want the best possible chance of keeping logins and extensions
-4. If you use Advanced Mode, choose the Chrome user to replicate.
-5. Click `Start CDP`.
-6. Send the generated `Generic Agent Prompt` to the remote agent.
+2. Install `CDP Bridge`.
+3. Launch it and keep it in the tray.
+4. Choose:
+   - browser mode
+   - page mode
+   - Chrome user for Advanced Mode
+5. Click `Start CDP`, or let the remote agent call `/control/start`.
 
-#### How Advanced Mode Actually Works
+#### 2. Remote Agent Flow
 
-Advanced Mode does **not** directly attach to the default real Chrome user-data directory.
+Check the bridge first:
 
-Instead it:
+```bash
+curl -s "http://<tailscale-ip>:<bridge-port>/json/version?token=<token>" --connect-timeout 5
+```
 
-1. creates a standalone replica directory using the selected Chrome user name
-2. launches Chrome with that managed replica and CDP enabled
-3. lets that replica become its own long-lived browser environment
+If the local browser is not ready yet, start it remotely:
 
-This is necessary because modern Chrome versions no longer allow stable remote debugging against the default real user-data directory, and a full data clone is too heavy for practical startup.
+```bash
+curl -X POST "http://<tailscale-ip>:<bridge-port>/control/start?token=<token>&mode=clean"
+curl -X POST "http://<tailscale-ip>:<bridge-port>/control/start?token=<token>&mode=advanced&profile=Default"
+```
 
-#### Advanced Mode Login Guidance
+Then connect to the bridge WS endpoint.
+
+### Advanced Mode Guidance
 
 The Advanced replica is designed to be **persistent**.
 
-The best mental model is:
+Recommended approach:
 
-- the first time you enter Advanced Mode, it behaves like a clean but independent browser replica
-- once you complete a login or second-factor check inside that replica
-- Chrome can continue syncing bookmarks, extensions, and other account data into that replica
-- keep reusing the same replica
-- do not reset it unless you intentionally want to rebuild from scratch
+- treat the first Advanced launch as a fresh standalone browser
+- complete sign-in, verification, and required authorizations inside that replica
+- keep reusing the same replica afterward
+- only reset it when you intentionally want to start over
 
-If Gmail or another high-risk site still asks for identity verification the first time, that is expected. In practice, reusing the same warmed-up replica is much more stable than rebuilding it every time.
-
-### Start Flow and Mode Changes
-
-The current interaction model is:
-
-- choosing browser mode, Chrome user, or page mode only **saves configuration**
-- clicking `Start CDP` actually starts the browser and bridge for the currently selected mode
-
-That means:
-
-- changing the mode does not immediately restart the browser
-- only `Start CDP` executes the selected mode
+If Gmail or another high-risk site still asks for identity verification the first time, that is expected. The important part is to keep reusing the same warmed-up replica instead of rebuilding it repeatedly.
 
 ### Developer Area
 
-The Developer section currently includes:
+The Developer section includes:
 
 - `Copy Playwright Snippet`
 - `Copy Developer CDP URL`
 - `Reset Advanced Replica`
 
-`Reset Advanced Replica` deletes the current Advanced replica.
+`Reset Advanced Replica` deletes the current Advanced replica. The next Advanced launch will create a fresh one.
 
-After that, the next time you choose Advanced Mode and click `Start CDP`, the app will build a new replica from scratch.
+### Generic Agent Prompt
 
-Only use that action when you intentionally want to discard the current warmed-up Advanced browser state.
-
-### Agent Handoff
-
-The primary handoff is:
+The main recommended handoff is:
 
 - `Copy Generic Agent Prompt`
 
-It packages the bridge endpoint, mode context, connection rules, and usage constraints into one clean prompt for the remote agent.
+It already includes:
 
-Developers can also use:
-
-- Playwright `connectOverCDP`
-- the raw developer CDP URL
-
-### Remote Browser Startup
-
-Starting from `0.2.1`, a remote agent no longer has to wait for the local user to manually start the browser first.
-
-If the bridge itself is reachable but local CDP is not ready yet, the remote side can call a control endpoint to start the requested browser mode.
-
-Endpoint format:
-
-```text
-http://<tailscale-ip>:<bridge-port>/control/start?token=<token>&mode=<clean|advanced>
-```
-
-Advanced Mode can also specify a profile:
-
-```text
-http://<tailscale-ip>:<bridge-port>/control/start?token=<token>&mode=advanced&profile=Default
-```
-
-Typical usage:
-
-```bash
-curl -X POST "http://100.121.130.36:39222/control/start?token=YOUR_TOKEN&mode=clean"
-curl -X POST "http://100.121.130.36:39222/control/start?token=YOUR_TOKEN&mode=advanced&profile=Default"
-```
-
-Recommended remote flow:
-
-1. call `/control/start`
-2. poll `/json/version?token=...`
-3. wait until `webSocketDebuggerUrl` is returned
-4. then start the real CDP / Playwright session
-
-As long as the local tray app stays alive in the background and the bridge service is still online, a remote agent can choose and start either:
-
-- `Clean Mode`
-- `Advanced Mode`
-
-That means the remote side no longer has to wait for a manual local browser start every time.
-
-### Standard Remote Agent Prompt Logic
-
-If you want the remote agent to decide and start the browser by itself, use this logic:
-
-```text
-Check the bridge HTTP version endpoint first.
-
-If it already returns Browser and webSocketDebuggerUrl, connect directly.
-
-If it returns 503 or says local CDP is not ready:
-- use /control/start?mode=clean when you need Clean Mode
-- use /control/start?mode=advanced&profile=Default when you need Advanced Mode
-
-After remote start, keep polling /json/version?token=...
-Only begin real CDP / Playwright actions after webSocketDebuggerUrl is available.
-```
+- bridge endpoints
+- remote startup logic
+- clean / advanced mode selection
+- WS connection rules
+- failure reporting requirements
 
 ### Clean Reinstall
 
-Use the installer option named `Clean reinstall` when:
+If the packaged app behaves oddly, old installs remain, the tray gets hijacked, or local runtime state is corrupted, use:
 
-- an older installed build is still interfering
-- a stale tray process hijacks the new packaged app
-- local runtime state is broken
-- the installed app still behaves like an older version
+- `Clean reinstall`
 
-It attempts to:
+It attempts to remove stale installs, old processes, stale runtime data, and old shortcuts.
 
-- stop old processes
-- run uninstallers for older installed versions
-- remove local runtime data and updater leftovers
-- delete shortcuts and stale install directories
-
-### Development
+### Local Development
 
 Install dependencies:
 
@@ -488,12 +328,6 @@ Run locally:
 
 ```bash
 npm start
-```
-
-Run bridge only:
-
-```bash
-npm run start:bridge
 ```
 
 Run syntax checks:
@@ -508,18 +342,14 @@ Build the Windows installer:
 npm run dist:win
 ```
 
-Installer output:
+Output:
 
-- `dist/CDP Bridge-Setup-0.2.1.exe`
+```text
+dist/CDP Bridge-Setup-0.2.1.exe
+```
 
-### Project Structure
+---
 
-- `electron/`: desktop shell, tray behavior, main window, renderer UI
-- `src/`: bridge core, browser management, config, supervisor logic
-- `build/`: NSIS installer customization
-- `scripts/`: local helper scripts
-- `docs/`: product and validation documents
-
-### License
+## License
 
 MIT

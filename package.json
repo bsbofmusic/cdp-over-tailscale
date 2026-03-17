@@ -3,7 +3,7 @@
   "version": "0.2.1",
   "private": true,
   "type": "module",
-  "description": "Local CDP bridge for Tailscale-accessible agent browser sessions",
+  "description": "Tailscale CDP bridge for remote browser agents on Windows",
   "author": "bsbofmusic",
   "main": "electron/main.js",
   "bin": {
