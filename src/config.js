@@ -39,6 +39,14 @@ function ensureBootstrapConfig() {
   }
 }
 
+function backupCorruptedConfig(raw) {
+  ensureDir();
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupPath = path.join(appDir, `config.corrupted-${stamp}.json`);
+  fs.writeFileSync(backupPath, raw);
+  return backupPath;
+}
+
 function createDefaultConfig() {
   const advancedChromeUserDataDir = path.join(process.env.LOCALAPPDATA || os.homedir(), 'Google', 'Chrome', 'User Data');
   return {
@@ -103,9 +111,27 @@ export function loadConfig() {
     return initial;
   }
 
-  const raw = fs.readFileSync(configPath, 'utf8');
-  const parsed = JSON.parse(raw);
-  return migrateConfig(parsed);
+  try {
+    const raw = fs.readFileSync(configPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return migrateConfig(parsed);
+  } catch (error) {
+    let backupPath = null;
+    try {
+      const raw = fs.readFileSync(configPath, 'utf8');
+      backupPath = backupCorruptedConfig(raw);
+    } catch {
+    }
+
+    const recovered = {
+      ...createDefaultConfig(),
+      configRecoveredAt: new Date().toISOString(),
+      configRecoveryReason: error.message,
+      configRecoveryBackupPath: backupPath,
+    };
+    fs.writeFileSync(configPath, JSON.stringify(recovered, null, 2));
+    return recovered;
+  }
 }
 
 export function saveConfig(config) {

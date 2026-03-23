@@ -59,6 +59,47 @@ function bridgeUnavailablePayload(config, error) {
   };
 }
 
+function getStatusContract(config, metadata, controls = {}) {
+  const canRemoteStart = Boolean(controls.start && config.launchChrome);
+  const bridgeReady = true;
+  const recommendedAction = !metadata.tailscale?.online
+    ? 'check_tailscale'
+    : metadata.cdpReady
+      ? 'connect_agent'
+      : canRemoteStart
+        ? 'start_browser'
+        : 'check_local_browser';
+  const statusHint = recommendedAction === 'check_tailscale'
+    ? 'Tailscale is not reporting online. Check the local Tailscale client.'
+    : recommendedAction === 'start_browser'
+      ? 'The bridge is reachable, but Chrome CDP is not ready yet. Start the selected browser mode.'
+      : recommendedAction === 'check_local_browser'
+        ? 'The bridge is reachable, but Chrome CDP is unavailable and remote start is disabled.'
+        : 'Bridge and Chrome CDP are ready. Agents can connect now.';
+
+  return {
+    ok: true,
+    checkedAt: new Date().toISOString(),
+    bridgeReady,
+    bridgePort: config.bridgePort,
+    chromeDebugPort: config.chromeDebugPort,
+    tailscaleIp: metadata.tailscaleIp,
+    tailscale: metadata.tailscale,
+    wsEndpoint: metadata.wsUrl,
+    cdpReady: metadata.cdpReady,
+    cdpError: metadata.cdpError,
+    canRemoteStart,
+    recommendedAction,
+    statusHint,
+    browser: metadata.versionInfo
+      ? {
+          browser: metadata.versionInfo.Browser,
+          protocolVersion: metadata.versionInfo['Protocol-Version']
+        }
+      : null
+  };
+}
+
 function json(response, statusCode, payload) {
   response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8' });
   response.end(JSON.stringify(payload, null, 2));
@@ -88,22 +129,7 @@ export async function startBridgeServer(config, controls = {}) {
         metadata.cdpError = error.message;
       }
 
-      return json(response, 200, {
-        ok: true,
-        bridgePort: config.bridgePort,
-        chromeDebugPort: config.chromeDebugPort,
-        tailscaleIp: metadata.tailscaleIp,
-        tailscale: metadata.tailscale,
-        wsEndpoint: metadata.wsUrl,
-        cdpReady: metadata.cdpReady,
-        cdpError: metadata.cdpError,
-        browser: metadata.versionInfo
-          ? {
-              browser: metadata.versionInfo.Browser,
-              protocolVersion: metadata.versionInfo['Protocol-Version']
-            }
-          : null
-      });
+      return json(response, 200, getStatusContract(config, metadata, controls));
     }
 
     if (parsed.pathname === '/json/version') {

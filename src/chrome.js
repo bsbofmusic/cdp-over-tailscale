@@ -6,6 +6,21 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 let managedBrowserPid = null;
+const browserRuntimeState = {
+  lastLaunchAt: null,
+  lastLaunchMode: null,
+  lastLaunchBrowser: null,
+  lastLaunchArgs: [],
+  lastLaunchError: null,
+  lastLaunchErrorCode: null,
+  lastLaunchDurationMs: null,
+  lastCdpReadyAt: null,
+  lastProbeAt: null,
+  lastProbeError: null,
+  lastProbeErrorCode: null,
+  lastProbeDurationMs: null,
+  managedBrowserPid: null,
+};
 
 const browserCandidates = [
   {
@@ -53,6 +68,69 @@ function readJsonFile(filePath) {
   } catch {
     return null;
   }
+}
+
+function now() {
+  return new Date().toISOString();
+}
+
+function normalizePathForMatch(value) {
+  return String(value || '').replace(/\\/g, '/').toLowerCase();
+}
+
+function classifyChromeError(error) {
+  const message = error?.message || 'Unknown Chrome error';
+  const lower = message.toLowerCase();
+
+  if (lower.includes('did not become ready in time')) {
+    return { code: 'cdp-timeout', message };
+  }
+  if (lower.includes('fetch failed')) {
+    return { code: 'cdp-unreachable', message };
+  }
+  if (lower.includes('unexpected 404')) {
+    return { code: 'cdp-endpoint-missing', message };
+  }
+  if (lower.includes('unexpected 403') || lower.includes('unexpected 401')) {
+    return { code: 'cdp-denied', message };
+  }
+  if (lower.includes('chrome executable not found')) {
+    return { code: 'browser-not-found', message };
+  }
+  if (lower.includes('advanced mode browser data is still being prepared')) {
+    return { code: 'advanced-replica-pending', message };
+  }
+  if (lower.includes('advanced mode could not launch')) {
+    return { code: 'advanced-launch-failed', message };
+  }
+  if (lower.includes('remote debugging enabled')) {
+    return { code: 'cdp-disabled', message };
+  }
+
+  return { code: 'chrome-error', message };
+}
+
+function markProbeSuccess(durationMs) {
+  browserRuntimeState.lastProbeAt = now();
+  browserRuntimeState.lastProbeError = null;
+  browserRuntimeState.lastProbeErrorCode = null;
+  browserRuntimeState.lastProbeDurationMs = durationMs;
+  browserRuntimeState.lastCdpReadyAt = browserRuntimeState.lastProbeAt;
+}
+
+function markProbeFailure(error, durationMs) {
+  const classified = classifyChromeError(error);
+  browserRuntimeState.lastProbeAt = now();
+  browserRuntimeState.lastProbeError = classified.message;
+  browserRuntimeState.lastProbeErrorCode = classified.code;
+  browserRuntimeState.lastProbeDurationMs = durationMs;
+}
+
+function markLaunchFailure(error, durationMs = null) {
+  const classified = classifyChromeError(error);
+  browserRuntimeState.lastLaunchError = classified.message;
+  browserRuntimeState.lastLaunchErrorCode = classified.code;
+  browserRuntimeState.lastLaunchDurationMs = durationMs;
 }
 
 export function resolveChromePath(configuredPath) {
@@ -125,7 +203,15 @@ async function readJson(url) {
 }
 
 export async function getChromeVersion(debugPort) {
-  return readJson(`http://127.0.0.1:${debugPort}/json/version`);
+  const startedAt = Date.now();
+  try {
+    const result = await readJson(`http://127.0.0.1:${debugPort}/json/version`);
+    markProbeSuccess(Date.now() - startedAt);
+    return result;
+  } catch (error) {
+    markProbeFailure(error, Date.now() - startedAt);
+    throw error;
+  }
 }
 
 export async function isChromeReachable(debugPort) {
@@ -158,15 +244,26 @@ async function killProcessTree(pid) {
 }
 
 async function findManagedBrowserPids(config) {
-  const filters = [`--remote-debugging-port=${config.chromeDebugPort}`];
+  const portMarker = `--remote-debugging-port=${config.chromeDebugPort}`;
+  const managedMarkers = [
+    config.chromeUserDataDir,
+    config.advancedReplicaRootDir,
+  ]
+    .map(normalizePathForMatch)
+    .filter(Boolean);
 
   const script = [
-    "$patterns = @(",
-    ...filters.map((pattern) => `  '${String(pattern).replace(/'/g, "''")}'`),
+    `$portMarker = '${String(portMarker).replace(/'/g, "''")}'`,
+    "$managedMarkers = @(",
+    ...managedMarkers.map((marker) => `  '${String(marker).replace(/'/g, "''")}'`),
     ")",
     "Get-CimInstance Win32_Process | Where-Object {",
     "  $cmd = $_.CommandLine",
-    "  $cmd -and (($patterns | Where-Object { $cmd -like ('*' + $_ + '*') }).Count -gt 0)",
+    "  if (-not $cmd) { return $false }",
+    "  $normalized = $cmd.Replace('\\', '/').ToLowerInvariant()",
+    "  $hasPort = $normalized.Contains($portMarker.ToLowerInvariant())",
+    "  $hasManagedMarker = $managedMarkers.Count -eq 0 -or (($managedMarkers | Where-Object { $normalized.Contains($_) }).Count -gt 0)",
+    "  $hasPort -and $hasManagedMarker",
     "} | Select-Object -ExpandProperty ProcessId"
   ].join('; ');
 
@@ -218,17 +315,23 @@ export async function ensureChrome(config, advancedLaunchContext, onProgress) {
     return await getChromeVersion(config.chromeDebugPort);
   } catch {
     if (!config.launchChrome) {
-      throw new Error('Chrome is not running with remote debugging enabled.');
+      const error = new Error('Chrome is not running with remote debugging enabled.');
+      markLaunchFailure(error);
+      throw error;
     }
   }
 
   const browser = detectPreferredBrowser(config.chromePath);
   if (!browser) {
-    throw new Error('Chrome executable not found. Set chromePath in config.json.');
+    const error = new Error('Chrome executable not found. Set chromePath in config.json.');
+    markLaunchFailure(error);
+    throw error;
   }
 
   if (config.browserMode === 'advanced' && !advancedLaunchContext) {
-    throw new Error('Advanced Mode browser data is still being prepared.');
+    const error = new Error('Advanced Mode browser data is still being prepared.');
+    markLaunchFailure(error);
+    throw error;
   }
 
   onProgress?.({ stage: 'preparing-browser', percent: 10, detail: browser.name });
@@ -252,6 +355,16 @@ export async function ensureChrome(config, advancedLaunchContext, onProgress) {
     args.splice(2, 0, `--profile-directory=${profileDirectory}`);
   }
 
+  browserRuntimeState.lastLaunchAt = now();
+  browserRuntimeState.lastLaunchMode = config.browserMode === 'advanced' ? 'advanced' : 'clean';
+  browserRuntimeState.lastLaunchBrowser = browser.name;
+  browserRuntimeState.lastLaunchArgs = [...args];
+  browserRuntimeState.lastLaunchError = null;
+  browserRuntimeState.lastLaunchErrorCode = null;
+  browserRuntimeState.lastLaunchDurationMs = null;
+
+  const launchStartedAt = Date.now();
+
   onProgress?.({ stage: 'launching-browser', percent: 88, detail: config.browserMode === 'advanced' ? profileDirectory : 'clean' });
 
   const child = spawn(browser.executablePath, args, {
@@ -260,18 +373,32 @@ export async function ensureChrome(config, advancedLaunchContext, onProgress) {
   });
 
   managedBrowserPid = child.pid ?? null;
+  browserRuntimeState.managedBrowserPid = managedBrowserPid;
   child.unref();
 
   try {
     onProgress?.({ stage: 'waiting-cdp', percent: 96, detail: String(config.chromeDebugPort) });
-    return await waitForChrome(config.chromeDebugPort, config.browserMode === 'advanced' ? 30000 : 15000);
+    const versionInfo = await waitForChrome(config.chromeDebugPort, config.browserMode === 'advanced' ? 30000 : 15000);
+    browserRuntimeState.lastLaunchDurationMs = Date.now() - launchStartedAt;
+    browserRuntimeState.lastLaunchError = null;
+    browserRuntimeState.lastLaunchErrorCode = null;
+    return versionInfo;
   } catch (error) {
     managedBrowserPid = null;
+    browserRuntimeState.managedBrowserPid = null;
+    markLaunchFailure(error, Date.now() - launchStartedAt);
     if (config.browserMode === 'advanced') {
       throw new Error('Advanced Mode could not launch the managed browser replica.');
     }
     throw error;
   }
+}
+
+export function getBrowserRuntimeState() {
+  return {
+    ...browserRuntimeState,
+    managedBrowserPid,
+  };
 }
 
 export function getBrowserModeMeta(config, advancedLaunchContext = null) {

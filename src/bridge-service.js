@@ -6,6 +6,7 @@ import {
   detectChromeProfiles,
   detectPreferredBrowser,
   ensureChrome,
+  getBrowserRuntimeState,
   getBrowserModeMeta,
   getChromeVersion,
   isChromeReachable,
@@ -49,8 +50,36 @@ async function reserveBridgePort(config) {
 export function createBridgeService() {
   let currentConfig = loadConfig();
   let serverHandle = null;
+  let lastRemoteStartAt = null;
+  let lastRemoteStartMode = null;
   const advancedProfileManager = createAdvancedProfileManager();
   const observability = createCdpObservability();
+
+  function getRecommendedAction({ tailscale, chromeReachable, canRemoteStart }) {
+    if (!tailscale?.online) {
+      return {
+        recommendedAction: 'check_tailscale',
+        statusHint: 'Tailscale is not reporting as online. Check the local Tailscale client first.'
+      };
+    }
+
+    if (!chromeReachable) {
+      return canRemoteStart
+        ? {
+            recommendedAction: 'start_browser',
+            statusHint: 'Bridge is reachable, but Chrome CDP is not ready yet. Start the selected browser mode.'
+          }
+        : {
+            recommendedAction: 'check_local_browser',
+            statusHint: 'Bridge is reachable, but Chrome CDP is unavailable and remote start is disabled.'
+          };
+    }
+
+    return {
+      recommendedAction: 'connect_agent',
+      statusHint: 'Bridge and Chrome CDP are ready. Agents can connect now.'
+    };
+  }
 
   async function ensureServerStarted() {
     if (serverHandle) {
@@ -70,6 +99,8 @@ export function createBridgeService() {
   }
 
   async function activateFromRemote(options = {}) {
+    lastRemoteStartAt = new Date().toISOString();
+    lastRemoteStartMode = options.mode === 'advanced' ? 'advanced' : 'clean';
     currentConfig = saveConfig({
       ...loadConfig(),
       ...(options.mode ? { browserMode: options.mode === 'advanced' ? 'advanced' : 'clean' } : {}),
@@ -99,8 +130,12 @@ export function createBridgeService() {
     ]);
     const advancedReplicaState = await advancedProfileManager.getProfileState(currentConfig);
     const modeMeta = getBrowserModeMeta(currentConfig, await advancedProfileManager.getLaunchContext(currentConfig));
+    const browserRuntime = getBrowserRuntimeState();
+    const canRemoteStart = Boolean(currentConfig.launchChrome);
+    const actionState = getRecommendedAction({ tailscale, chromeReachable, canRemoteStart });
     const baseHost = tailscale.tailscaleIp ?? '127.0.0.1';
     const diagnosticsBase = {
+      statusEndpoint: `http://${baseHost}:${currentConfig.bridgePort}/status`,
       diagnosticsEndpoint: `http://${baseHost}:${currentConfig.bridgePort}/diagnostics?token=${currentConfig.token}`,
       closeSessionTargetsBase: `http://${baseHost}:${currentConfig.bridgePort}/control/close-session-targets?token=${currentConfig.token}`,
       activeAgentSessions: observability.listSessions(),
@@ -119,10 +154,21 @@ export function createBridgeService() {
       advancedReplicaRootDir: currentConfig.advancedReplicaRootDir,
       advancedReplicaState,
       tailscale,
+      bridgeReady: Boolean(serverHandle),
+      cdpReady: chromeReachable,
+      cdpError: chromeReachable ? null : browserRuntime.lastProbeError,
+      cdpErrorCode: chromeReachable ? null : browserRuntime.lastProbeErrorCode,
+      canRemoteStart,
+      lastRemoteStartAt,
+      lastRemoteStartMode,
+      browserRuntime,
       token: currentConfig.token,
       launchOnLogin: currentConfig.launchOnLogin,
       minimizeToTray: currentConfig.minimizeToTray,
       language: currentConfig.language,
+      configRecoveredAt: currentConfig.configRecoveredAt ?? null,
+      configRecoveryReason: currentConfig.configRecoveryReason ?? null,
+      configRecoveryBackupPath: currentConfig.configRecoveryBackupPath ?? null,
       browserMode: modeMeta.browserMode,
       deviceMode: modeMeta.deviceMode,
       viewport: modeMeta.viewport,
@@ -131,6 +177,7 @@ export function createBridgeService() {
       wsEndpoint: `ws://${baseHost}:${currentConfig.bridgePort}/devtools/browser?token=${currentConfig.token}`,
       versionEndpoint: `http://${baseHost}:${currentConfig.bridgePort}/json/version?token=${currentConfig.token}`,
       controlStartBase: `http://${baseHost}:${currentConfig.bridgePort}/control/start?token=${currentConfig.token}`,
+      ...actionState,
       ...diagnosticsBase,
     };
 

@@ -10,6 +10,25 @@ function now() {
   return new Date().toISOString();
 }
 
+function getMonitorIntervalMs(snapshot, config, actionInFlight) {
+  if (actionInFlight) {
+    return 750;
+  }
+  if (snapshot.phase === 'idle') {
+    return Math.max(config.healthCheckIntervalMs, 5000);
+  }
+  if (snapshot.cdpState === 'available') {
+    return Math.max(config.healthCheckIntervalMs, 3000);
+  }
+  if (snapshot.cdpState === 'waiting') {
+    return Math.max(1000, Math.min(config.healthCheckIntervalMs, 1500));
+  }
+  if (snapshot.phase === 'error') {
+    return Math.max(config.healthCheckIntervalMs, 3000);
+  }
+  return Math.max(config.healthCheckIntervalMs, 2000);
+}
+
 function deriveState(snapshot) {
   return {
     phase: snapshot.running
@@ -62,6 +81,7 @@ export function createBridgeSupervisor() {
       cdpState: state.cdpState,
       running: state.running,
       lastError: state.lastError,
+      recommendedAction: state.recommendedAction,
     });
     events.emit('state', state);
     return state;
@@ -95,6 +115,7 @@ export function createBridgeSupervisor() {
     return pushState({
       ...snapshot,
       ...derived,
+      lastStatusAt: now(),
       lastHealthyAt: snapshot.running && snapshot.chromeReachable ? now() : state.lastHealthyAt,
     });
   }
@@ -110,6 +131,7 @@ export function createBridgeSupervisor() {
         bridgeState: 'stopped',
         cdpState: 'unavailable',
         lastError: error.message,
+        lastStatusAt: now(),
       });
     }
   }
@@ -122,7 +144,7 @@ export function createBridgeSupervisor() {
   function startMonitor() {
     stopMonitor();
     const schedule = () => {
-      const intervalMs = service.getConfig().healthCheckIntervalMs;
+      const intervalMs = getMonitorIntervalMs(state, service.getConfig(), actionInFlight);
       monitorTimer = setTimeout(async () => {
         await tick();
         schedule();
@@ -160,6 +182,7 @@ export function createBridgeSupervisor() {
         ...snapshot,
         ...derived,
         operationProgress: null,
+        lastStatusAt: now(),
         lastHealthyAt: snapshot.running && snapshot.chromeReachable ? now() : state.lastHealthyAt,
       });
     } catch (error) {
@@ -172,6 +195,7 @@ export function createBridgeSupervisor() {
         running: false,
         operationProgress: null,
         lastError: error.message,
+        lastStatusAt: now(),
       });
     } finally {
       actionInFlight = false;
@@ -202,6 +226,7 @@ export function createBridgeSupervisor() {
         bridgeState: 'stopped',
         cdpState: 'unavailable',
         running: false,
+        lastStatusAt: now(),
       });
     },
     async restart() {

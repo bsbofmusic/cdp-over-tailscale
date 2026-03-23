@@ -3,6 +3,10 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+const STATUS_CACHE_TTL_MS = 5000;
+const STATUS_CACHE_STALE_MS = 30000;
+let cachedStatus = null;
+let cachedStatusAt = 0;
 
 const tailscaleCandidates = [
   'tailscale',
@@ -50,22 +54,42 @@ export async function getTailscaleStatus() {
   try {
     const { stdout } = await runTailscale(['status', '--json']);
     const parsed = JSON.parse(stdout);
-    return {
+    const nextStatus = {
       installed: true,
       online: parsed.BackendState === 'Running',
       tailscaleIp: parsed.TailscaleIPs?.[0] ?? null,
       backendState: parsed.BackendState,
       tailnet: parsed.CurrentTailnet?.Name ?? null,
-      hostname: parsed.Self?.HostName ?? os.hostname()
+      hostname: parsed.Self?.HostName ?? os.hostname(),
+      source: 'tailscale-cli',
+      stale: false,
+      checkedAt: new Date().toISOString()
     };
-  } catch {
+    cachedStatus = nextStatus;
+    cachedStatusAt = Date.now();
+    return nextStatus;
+  } catch (error) {
+    if (cachedStatus && Date.now() - cachedStatusAt <= STATUS_CACHE_STALE_MS) {
+      return {
+        ...cachedStatus,
+        stale: true,
+        source: Date.now() - cachedStatusAt <= STATUS_CACHE_TTL_MS ? 'cache-fresh' : 'cache-stale',
+        checkedAt: new Date().toISOString(),
+        lastError: error.message
+      };
+    }
+
     return {
       installed: false,
       online: false,
       tailscaleIp: getPrivateIpv4Candidates()[0] ?? null,
       backendState: 'Unavailable',
       tailnet: null,
-      hostname: os.hostname()
+      hostname: os.hostname(),
+      source: 'local-fallback',
+      stale: false,
+      checkedAt: new Date().toISOString(),
+      lastError: error.message
     };
   }
 }

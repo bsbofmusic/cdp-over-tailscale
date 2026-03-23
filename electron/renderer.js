@@ -110,6 +110,7 @@ const strings = {
     copyPrompt: '复制通用 Agent Prompt',
     copyPlaywright: '复制 Playwright 代码',
     copyRaw: '复制开发者 CDP 地址',
+    copyDiagnostics: '复制诊断快照',
     resetAdvancedReplica: '重置高级模式副本',
 
     handoffSummary: '优先把“通用 Agent Prompt”发给 Agent，它会按背景、目标和步骤去连接本地 Chrome bridge。',
@@ -135,6 +136,7 @@ const strings = {
       cleanInstall: '复制一段简短说明，告诉用户什么时候该使用 Clean reinstall。',
       playwright: '复制 Playwright connectOverCDP 代码片段。',
       raw: '复制 bridge 的底层 WS 地址，适合熟悉 CDP 的开发者调试使用。',
+      diagnostics: '复制当前桥接、CDP、Tailscale 与最近一次启动的诊断快照。',
       resetAdvancedReplica: '删除当前高级模式副本。下次在高级模式点击一键启动时，会重新创建一个新的副本。'
     }
   },
@@ -232,6 +234,7 @@ const strings = {
     copyPrompt: 'Copy Generic Agent Prompt',
     copyPlaywright: 'Copy Playwright Snippet',
     copyRaw: 'Copy Developer CDP URL',
+    copyDiagnostics: 'Copy Diagnostics Snapshot',
     resetAdvancedReplica: 'Reset Advanced Replica',
 
     handoffSummary: 'Start by sending the generic agent prompt. It explains the background, goal, and exact bridge connection steps.',
@@ -257,6 +260,7 @@ const strings = {
       cleanInstall: 'Copy a short explanation of when to use Clean reinstall.',
       playwright: 'Copy a Playwright connectOverCDP snippet.',
       raw: 'Copy the low-level bridge WS endpoint for CDP-capable developer tools.',
+      diagnostics: 'Copy the current bridge, CDP, Tailscale, and recent launch diagnostics as one snapshot.',
       resetAdvancedReplica: 'Delete the current Advanced Mode replica. The next Advanced Mode start will rebuild it from scratch.'
     }
   }
@@ -341,6 +345,7 @@ function renderStaticSections(language) {
   developerRoot.innerHTML = `
     <button data-action="copy-playwright-snippet" title="${strings[language].buttonHints.playwright}">${text('copyPlaywright', language)}</button>
     <button data-action="copy-raw-cdp" title="${strings[language].buttonHints.raw}">${text('copyRaw', language)}</button>
+    <button data-action="copy-diagnostics-snapshot" title="${strings[language].buttonHints.diagnostics}">${text('copyDiagnostics', language)}</button>
     <button data-action="reset-advanced-replica" title="${strings[language].buttonHints.resetAdvancedReplica}">${text('resetAdvancedReplica', language)}</button>
     <div class="handoff-copy">${text('developerSummary', language)}</div>
     <div class="handoff-copy">${text('developerModes', language)}</div>
@@ -448,6 +453,7 @@ function render(state) {
 
   diagnosticsRoot.innerHTML = `
     <div><strong>${text('ws', language)}</strong><span>${state.wsEndpoint ?? text('unavailable', language)}</span></div>
+    <div><strong>Status</strong><span>${state.statusEndpoint ?? text('unavailable', language)}</span></div>
     <div><strong>${text('http', language)}</strong><span>${state.versionEndpoint ?? text('unavailable', language)}</span></div>
     <div><strong>${text('control', language)}</strong><span>${state.controlStartBase ?? text('unavailable', language)}</span></div>
     <div><strong>${text('appVersion', language)}</strong><span>${state.appVersion ?? state.packageVersion ?? text('unavailable', language)}</span></div>
@@ -459,6 +465,14 @@ function render(state) {
     <div><strong>${text('userData', language)}</strong><span>${state.userDataPath ?? state.appDir}</span></div>
     <div><strong>${text('logs', language)}</strong><span>${state.logDir}</span></div>
     <div><strong>Mode</strong><span>${state.portableMode ? `Portable ${state.appVersion ?? state.packageVersion ?? ''}`.trim() : 'Installed / Dev'}</span></div>
+    <div><strong>CDP Ready</strong><span>${String(Boolean(state.cdpReady))}</span></div>
+    <div><strong>CDP Error</strong><span>${state.cdpError ?? text('none', language)}</span></div>
+    <div><strong>Last Healthy</strong><span>${state.lastHealthyAt ?? text('none', language)}</span></div>
+    <div><strong>Last Status</strong><span>${state.lastStatusAt ?? text('none', language)}</span></div>
+    <div><strong>Last Remote Start</strong><span>${state.lastRemoteStartAt ? `${state.lastRemoteStartAt}${state.lastRemoteStartMode ? ` · ${state.lastRemoteStartMode}` : ''}` : text('none', language)}</span></div>
+    <div><strong>Config Recovery</strong><span>${state.configRecoveredAt ? `${state.configRecoveredAt} · ${state.configRecoveryReason ?? text('none', language)}` : text('none', language)}</span></div>
+    <div><strong>Recommended Action</strong><span>${state.recommendedAction ?? text('none', language)}</span></div>
+    <div><strong>Status Hint</strong><span>${state.statusHint ?? text('none', language)}</span></div>
     <div><strong>Diagnostics</strong><span>${state.diagnosticsEndpoint ?? text('none', language)}</span></div>
     <div><strong>Agent Sessions</strong><span>${Array.isArray(state.activeAgentSessions) ? state.activeAgentSessions.length : 0}</span></div>
     <div><strong>${text('lastError', language)}</strong><span>${state.lastError ?? text('none', language)}</span></div>
@@ -504,6 +518,9 @@ document.addEventListener('click', async (event) => {
   }
   if (action === 'copy-raw-cdp') {
     await window.bridgeApp.invoke('bridge:copy-agent-payload', { kind: 'raw' });
+  }
+  if (action === 'copy-diagnostics-snapshot') {
+    await window.bridgeApp.invoke('bridge:copy-diagnostics-snapshot');
   }
   if (action === 'reset-advanced-replica') {
     await window.bridgeApp.invoke('bridge:reset-advanced-replica');

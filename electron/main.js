@@ -49,9 +49,11 @@ const translations = {
     promptAsk3: '- 如果失败，返回你实际尝试连接的完整地址',
     copiedPlaywright: '已复制 Playwright 代码片段。',
     copiedRaw: '已复制原始 CDP 地址。',
+    copiedDiagnostics: '已复制诊断快照。',
     resetReplicaDone: '已重置高级模式副本。下次启动高级模式时会重新创建。',
     copyPlaywright: '复制 Playwright 代码',
     copyRaw: '复制原始 CDP 地址',
+    copyDiagnostics: '复制诊断快照',
     openDataDir: '打开绿色版数据目录',
     portableConflictTitle: '检测到已运行实例',
     portableConflictBody: '检测到其他 CDP Bridge 实例，当前版本会自动关闭旧实例后接管运行。',
@@ -89,9 +91,11 @@ const translations = {
     promptAsk3: '- if it failed, the exact address you actually attempted',
     copiedPlaywright: 'Playwright snippet copied.',
     copiedRaw: 'Raw CDP URL copied.',
+    copiedDiagnostics: 'Diagnostics snapshot copied.',
     resetReplicaDone: 'Advanced Mode replica reset. It will be recreated next time you start Advanced Mode.',
     copyPlaywright: 'Copy Playwright Snippet',
     copyRaw: 'Copy Raw CDP URL',
+    copyDiagnostics: 'Copy Diagnostics Snapshot',
     openDataDir: 'Open portable data directory',
     portableConflictTitle: 'Another instance is already running',
     portableConflictBody: 'Another CDP Bridge instance was detected. The current build will automatically close the older instance and take over.',
@@ -119,6 +123,7 @@ function buildGenericAgentPrompt(snapshot) {
   const language = snapshot.language ?? 'zh-CN';
   const wsUrl = snapshot.wsEndpoint ?? '<WS endpoint unavailable>';
   const httpUrl = snapshot.versionEndpoint ?? '<HTTP endpoint unavailable>';
+  const statusUrl = snapshot.statusEndpoint ?? '<Status endpoint unavailable>';
   const controlBase = snapshot.controlStartBase ?? '<Control start endpoint unavailable>';
   const diagnosticsUrl = snapshot.diagnosticsEndpoint ?? '<Diagnostics endpoint unavailable>';
   const closeSessionTargetsBase = snapshot.closeSessionTargetsBase ?? '<Close-session endpoint unavailable>';
@@ -147,6 +152,7 @@ function buildGenericAgentPrompt(snapshot) {
       ...(browserProfileLine ? [browserProfileLine] : []),
       deviceModeLine,
       'Bridge endpoints',
+      `Status endpoint: ${statusUrl}`,
       `WS endpoint: ${wsUrl}`,
       `HTTP discovery endpoint: ${httpUrl}`,
       `Remote start base: ${controlBase}`,
@@ -155,7 +161,7 @@ function buildGenericAgentPrompt(snapshot) {
       'Workflow',
       '1. Check bridge status first. Treat Tailscale / bridge reachability separately from CDP readiness:',
       `curl -s "${diagnosticsUrl}"`,
-      `curl -s "http://${snapshot.tailscale?.tailscaleIp ?? '127.0.0.1'}:${snapshot.bridgePort}/status"`,
+      `curl -s "${statusUrl}"`,
       '2. If `cdpReady` is false, the machine can still be online. Start the mode you need instead of treating it as a Tailscale outage:',
       `Clean Mode: curl -X POST "${controlBase}&mode=clean"`,
       `Advanced Mode: curl -X POST "${controlBase}&mode=advanced&profile=${snapshot.advancedProfileDirectory || 'Default'}"`,
@@ -202,6 +208,7 @@ function buildGenericAgentPrompt(snapshot) {
     ...(browserProfileLine ? [browserProfileLine] : []),
     deviceModeLine,
     'Bridge 信息',
+    `状态地址：${statusUrl}`,
     `WS 地址：${wsUrl}`,
     `HTTP 探测地址：${httpUrl}`,
     `远程启动基地址：${controlBase}`,
@@ -210,7 +217,7 @@ function buildGenericAgentPrompt(snapshot) {
     '执行流程',
     '1. 先检查 bridge 状态，把 Tailscale/bridge 在线与 CDP 是否就绪分开判断：',
     `curl -s "${diagnosticsUrl}"`,
-    `curl -s "http://${snapshot.tailscale?.tailscaleIp ?? '127.0.0.1'}:${snapshot.bridgePort}/status"`,
+    `curl -s "${statusUrl}"`,
     '2. 如果 `cdpReady` 为 false，说明浏览器 CDP 还没准备好，但不代表 Tailscale 已掉线。这时先远程拉起你需要的模式：',
     `干净模式：curl -X POST "${controlBase}&mode=clean"`,
     `高级模式：curl -X POST "${controlBase}&mode=advanced&profile=${snapshot.advancedProfileDirectory || 'Default'}"`,
@@ -259,6 +266,49 @@ function buildPlaywrightSnippet(snapshot) {
     '  console.log({ contexts: contexts.length })',
     '})()'
   ].join('\n');
+}
+
+function buildDiagnosticsSnapshot(snapshot) {
+  const diagnostics = {
+    capturedAt: new Date().toISOString(),
+    appVersion: snapshot.appVersion,
+    packageVersion: snapshot.packageVersion,
+    phase: snapshot.phase,
+    appState: snapshot.appState,
+    bridgeState: snapshot.bridgeState,
+    cdpState: snapshot.cdpState,
+    bridgeReady: snapshot.bridgeReady,
+    cdpReady: snapshot.cdpReady,
+    cdpError: snapshot.cdpError,
+    cdpErrorCode: snapshot.cdpErrorCode,
+    recommendedAction: snapshot.recommendedAction,
+    statusHint: snapshot.statusHint,
+    tailscale: snapshot.tailscale,
+    browserName: snapshot.browserName,
+    browserMode: snapshot.browserMode,
+    deviceMode: snapshot.deviceMode,
+    statusEndpoint: snapshot.statusEndpoint,
+    versionEndpoint: snapshot.versionEndpoint,
+    wsEndpoint: snapshot.wsEndpoint,
+    diagnosticsEndpoint: snapshot.diagnosticsEndpoint,
+    controlStartBase: snapshot.controlStartBase,
+    lastHealthyAt: snapshot.lastHealthyAt,
+    lastStatusAt: snapshot.lastStatusAt,
+    lastRemoteStartAt: snapshot.lastRemoteStartAt,
+    lastRemoteStartMode: snapshot.lastRemoteStartMode,
+    browserRuntime: snapshot.browserRuntime,
+    activeAgentSessions: Array.isArray(snapshot.activeAgentSessions) ? snapshot.activeAgentSessions.length : 0,
+    installPath: snapshot.installPath,
+    userDataPath: snapshot.userDataPath,
+    configPath: snapshot.configPath,
+    configRecoveredAt: snapshot.configRecoveredAt,
+    configRecoveryReason: snapshot.configRecoveryReason,
+    configRecoveryBackupPath: snapshot.configRecoveryBackupPath,
+    logDir: snapshot.logDir,
+    lastError: snapshot.lastError,
+  };
+
+  return JSON.stringify(diagnostics, null, 2);
 }
 
 function buildCleanInstallGuide(snapshot) {
@@ -310,6 +360,8 @@ function buildAgentPayload(kind, snapshot) {
       return { text: buildPlaywrightSnippet(snapshot), notice: t(snapshot.language ?? 'zh-CN', 'copiedPlaywright') };
     case 'raw':
       return { text: snapshot.wsEndpoint ?? '', notice: t(snapshot.language ?? 'zh-CN', 'copiedRaw') };
+    case 'diagnostics':
+      return { text: buildDiagnosticsSnapshot(snapshot), notice: t(snapshot.language ?? 'zh-CN', 'copiedDiagnostics') };
     default:
       return { text: snapshot.wsEndpoint ?? '', notice: t(snapshot.language ?? 'zh-CN', 'copiedRaw') };
   }
@@ -608,6 +660,7 @@ function wireIpc() {
     clipboard.writeText(buildCleanInstallGuide(snapshot));
     showNotification(snapshot.language === 'en-US' ? 'Clean reinstall guide copied.' : '已复制清洁重装说明。');
   });
+  ipcMain.handle('bridge:copy-diagnostics-snapshot', async () => copyAgentPayload('diagnostics'));
   ipcMain.handle('bridge:reset-advanced-replica', async () => {
     const snapshot = await supervisor.resetAdvancedReplica();
     showNotification(t(snapshot.language ?? 'zh-CN', 'resetReplicaDone'));
