@@ -351,6 +351,40 @@ function updateLaunchOnLogin(enabled) {
     openAtLogin: enabled,
     path: process.execPath
   });
+
+  const regKey = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+  const valueName = 'CDP Bridge';
+  const execPath = process.execPath;
+
+  try {
+    const { execFileSync } = require('child_process');
+    if (enabled) {
+      const psSet = [
+        `Set-ItemProperty -Path 'Registry::${regKey}' -Name '${valueName}' -Value '\\"${execPath}\\"' -Force`,
+      ].join('; ');
+      execFileSync('powershell.exe', ['-NoProfile', '-Command', psSet], { windowsHide: true });
+    } else {
+      const psDel = [
+        `Remove-ItemProperty -Path 'Registry::${regKey}' -Name '${valueName}' -ErrorAction SilentlyContinue`,
+      ].join('');
+      execFileSync('powershell.exe', ['-NoProfile', '-Command', psDel], { windowsHide: true });
+    }
+  } catch {
+  }
+
+  try {
+    const { execFileSync: exec2 } = require('child_process');
+    const psVerify = `Get-ItemProperty -Path 'Registry::${regKey}' -Name '${valueName}' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ${valueName}`;
+    const current = exec2('powershell.exe', ['-NoProfile', '-Command', psVerify], { encoding: 'utf8', windowsHide: true });
+    const trimmed = (current || '').trim().replace(/^"|"$/g, '').replace(/\\$/, '');
+    if (trimmed !== execPath && trimmed !== `"${execPath}"` && trimmed !== `'${execPath}'`) {
+      const psFix = [
+        `Set-ItemProperty -Path 'Registry::${regKey}' -Name '${valueName}' -Value '\\"${execPath}\\"' -Force`,
+      ].join('; ');
+      exec2('powershell.exe', ['-NoProfile', '-Command', psFix], { windowsHide: true });
+    }
+  } catch {
+  }
 }
 
 async function copyOpenClawPrompt() {
