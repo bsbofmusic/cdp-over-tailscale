@@ -50,11 +50,18 @@ function parseSessionOptions(parsedUrl) {
 }
 
 function bridgeUnavailablePayload(config, error) {
+  const detail = error?.message || 'Browser CDP is not active yet';
   return {
     ok: false,
-    error: 'Local browser CDP is not ready',
-    detail: error.message,
-    hint: 'Start the selected browser mode locally and wait until the app shows CDP available.',
+    bridgeReady: true,
+    standby: true,
+    error: 'Bridge standby: local browser CDP is not active yet',
+    detail,
+    hint: 'The bridge is already online and ready to launch a browser. Start the selected browser mode, then retry this endpoint.',
+    recommendedAction: config.launchChrome ? 'start_browser' : 'launch_browser_manually',
+    statusHint: config.launchChrome
+      ? 'Bridge is online in standby mode. Launch the selected browser mode, then reconnect.'
+      : 'Bridge is online in standby mode, but remote start is disabled. Launch the browser locally, then reconnect.',
     chromeDebugPort: config.chromeDebugPort,
   };
 }
@@ -72,9 +79,9 @@ function getStatusContract(config, metadata, controls = {}) {
   const statusHint = recommendedAction === 'check_tailscale'
     ? 'Tailscale is not reporting online. Check the local Tailscale client.'
     : recommendedAction === 'start_browser'
-      ? 'The bridge is reachable, but Chrome CDP is not ready yet. Start the selected browser mode.'
+      ? 'Bridge is online in standby mode. Chrome CDP is not active yet. Start the selected browser mode.'
       : recommendedAction === 'check_local_browser'
-        ? 'The bridge is reachable, but Chrome CDP is unavailable and remote start is disabled.'
+        ? 'Bridge is online in standby mode. Chrome CDP is not active yet, and remote start is disabled.'
         : 'Bridge and Chrome CDP are ready. Agents can connect now.';
 
   return {

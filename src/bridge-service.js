@@ -67,11 +67,11 @@ export function createBridgeService() {
       return canRemoteStart
         ? {
             recommendedAction: 'start_browser',
-            statusHint: 'Bridge is reachable, but Chrome CDP is not ready yet. Start the selected browser mode.'
+            statusHint: 'Bridge is online in standby mode. Chrome CDP is not active yet. Start the selected browser mode.'
           }
         : {
             recommendedAction: 'check_local_browser',
-            statusHint: 'Bridge is reachable, but Chrome CDP is unavailable and remote start is disabled.'
+            statusHint: 'Bridge is online in standby mode. Chrome CDP is not active yet, and remote start is disabled.'
           };
     }
 
