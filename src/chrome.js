@@ -51,6 +51,25 @@ const browserCandidates = [
   paths: browser.paths.filter(Boolean)
 }));
 
+const desktopViewportArgs = [
+  '--window-size=1366,768',
+  '--window-size=1440,900',
+  '--window-size=1536,864',
+  '--window-size=1600,900',
+  '--window-size=1728,1117',
+  '--window-size=1920,1080',
+];
+
+const mobileViewportArgs = [
+  '--window-size=390,844',
+  '--window-size=412,915',
+  '--window-size=430,932',
+];
+
+function pickRandom(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
 function exists(targetPath) {
   try {
     return fs.existsSync(targetPath);
@@ -339,13 +358,14 @@ export async function ensureChrome(config, advancedLaunchContext, onProgress) {
   const profileRootDir = advancedLaunchContext?.userDataDir ?? config.chromeUserDataDir;
   const profileDirectory = advancedLaunchContext?.profileDirectory ?? config.advancedProfileDirectory ?? 'Default';
   const viewportArg = config.deviceMode === 'mobile'
-    ? '--window-size=1080,1920'
-    : '--window-size=1920,1080';
+    ? pickRandom(mobileViewportArgs)
+    : pickRandom(desktopViewportArgs);
 
   const args = [
     `--remote-debugging-port=${config.chromeDebugPort}`,
     `--user-data-dir=${profileRootDir}`,
     viewportArg,
+    '--lang=zh-CN',
     '--no-first-run',
     '--no-default-browser-check',
     'about:blank'

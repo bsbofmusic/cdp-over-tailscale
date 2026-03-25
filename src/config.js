@@ -15,7 +15,21 @@ function detectPortableAppDir() {
     return path.join(portableExecutableDir, 'data');
   }
 
-  return path.join(path.dirname(process.execPath), 'data');
+  const execDir = path.dirname(process.execPath);
+  const candidate = path.join(execDir, 'data');
+  const tempRoot = process.env.TEMP ? path.resolve(process.env.TEMP) : null;
+
+  if (tempRoot) {
+    try {
+      const resolvedExecDir = path.resolve(execDir);
+      if (resolvedExecDir.startsWith(tempRoot) && !fs.existsSync(candidate)) {
+        return null;
+      }
+    } catch {
+    }
+  }
+
+  return candidate;
 }
 
 const appDir = detectPortableAppDir() ?? legacyAppDir;

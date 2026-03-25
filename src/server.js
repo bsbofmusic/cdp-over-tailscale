@@ -49,6 +49,15 @@ function parseSessionOptions(parsedUrl) {
   };
 }
 
+function parseEnsureSiteTabOptions(parsedUrl) {
+  return {
+    url: parsedUrl.searchParams.get('url') || undefined,
+    host: parsedUrl.searchParams.get('host') || undefined,
+    titleHint: parsedUrl.searchParams.get('titleHint') || undefined,
+    activate: parsedUrl.searchParams.get('activate') !== 'false',
+  };
+}
+
 function bridgeUnavailablePayload(config, error) {
   const detail = error?.message || 'Browser CDP is not active yet';
   return {
@@ -211,6 +220,23 @@ export async function startBridgeServer(config, controls = {}) {
         return json(response, 200, {
           ok: true,
           ...(await controls.closeSessionTargets(sessionId))
+        });
+      } catch (error) {
+        return json(response, 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (parsed.pathname === '/control/ensure-site-tab') {
+      if (!isAuthorized(request, config.token)) {
+        return json(response, 401, { ok: false, error: 'Unauthorized' });
+      }
+      if (!controls.ensureSiteTab) {
+        return json(response, 501, { ok: false, error: 'ensure-site-tab is not available' });
+      }
+      try {
+        return json(response, 200, {
+          ok: true,
+          ...(await controls.ensureSiteTab(parseEnsureSiteTabOptions(parsed)))
         });
       } catch (error) {
         return json(response, 500, { ok: false, error: error.message });

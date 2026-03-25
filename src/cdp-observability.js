@@ -253,6 +253,57 @@ export function createCdpObservability() {
     return { closedTargetIds, missingSession: false };
   }
 
+  async function ensureSiteTab(config, options = {}) {
+    const url = String(options.url || '').trim();
+    const host = String(options.host || '').trim();
+    const titleHint = String(options.titleHint || '').trim();
+    const activate = options.activate !== false;
+
+    if (!url) {
+      throw new Error('url is required');
+    }
+
+    const targets = await listBrowserTargets(config);
+    const matched = targets.find((target) => {
+      if (target.type !== 'page') return false;
+      if (host && String(target.url || '').includes(host)) return true;
+      if (titleHint && String(target.title || '').includes(titleHint)) return true;
+      return false;
+    });
+
+    if (matched) {
+      if (activate) {
+        try {
+          await callBrowserEndpoint(config, 'Target.activateTarget', { targetId: matched.targetId });
+        } catch {
+        }
+      }
+      return {
+        reused: true,
+        created: false,
+        targetId: matched.targetId,
+        url: matched.url,
+        title: matched.title,
+      };
+    }
+
+    const created = await callBrowserEndpoint(config, 'Target.createTarget', { url });
+    const targetId = created?.targetId ?? null;
+    if (activate && targetId) {
+      try {
+        await callBrowserEndpoint(config, 'Target.activateTarget', { targetId });
+      } catch {
+      }
+    }
+    return {
+      reused: false,
+      created: true,
+      targetId,
+      url,
+      title: null,
+    };
+  }
+
   return {
     openSession,
     closeSession,
@@ -268,5 +319,6 @@ export function createCdpObservability() {
       };
     },
     closeSessionTargets,
+    ensureSiteTab,
   };
 }

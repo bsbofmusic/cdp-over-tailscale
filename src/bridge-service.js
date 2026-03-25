@@ -14,7 +14,7 @@ import {
 } from './chrome.js';
 import { createAdvancedProfileManager } from './advanced-profile-manager.js';
 import { createCdpObservability } from './cdp-observability.js';
-import { loadConfig, saveConfig } from './config.js';
+import { getAppDir, getConfigPath, loadConfig, saveConfig } from './config.js';
 import { startBridgeServer } from './server.js';
 import { getTailscaleStatus } from './tailscale.js';
 
@@ -95,6 +95,7 @@ export function createBridgeService() {
       trackIncoming: (sessionId, message) => observability.trackIncoming(sessionId, message),
       getDiagnostics: async () => observability.getDiagnostics(currentConfig),
       closeSessionTargets: async (sessionId) => observability.closeSessionTargets(currentConfig, sessionId),
+      ensureSiteTab: async (options = {}) => observability.ensureSiteTab(currentConfig, options),
     });
   }
 
@@ -166,6 +167,8 @@ export function createBridgeService() {
       launchOnLogin: currentConfig.launchOnLogin,
       minimizeToTray: currentConfig.minimizeToTray,
       language: currentConfig.language,
+      appDir: getAppDir(),
+      configPath: getConfigPath(),
       configRecoveredAt: currentConfig.configRecoveredAt ?? null,
       configRecoveryReason: currentConfig.configRecoveryReason ?? null,
       configRecoveryBackupPath: currentConfig.configRecoveryBackupPath ?? null,

@@ -2,7 +2,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-blue.svg)](#)
 [![Electron](https://img.shields.io/badge/Electron-35.x-47848f.svg)](https://www.electronjs.org/)
-[![Version](https://img.shields.io/badge/Version-0.2.1-green.svg)](./docs/RELEASE_NOTES_0_2_1.md)
+[![Version](https://img.shields.io/badge/Version-0.2.9-green.svg)](./docs/RELEASE_NOTES_0_2_9.md)
 [![cdper MCP](https://img.shields.io/npm/v/@bsbofmusic/cdper-mcp?label=cdper%20MCP&color=CB3837)](https://www.npmjs.com/package/@bsbofmusic/cdper-mcp)
 [![OpenClaw Compatible](https://img.shields.io/badge/Compatible-OpenClaw-181717.svg)](https://openclaw.ai)
 
@@ -64,6 +64,7 @@ flowchart LR
 支持的API接口：
 - `/control/start?mode=clean`：远程拉起干净模式浏览器
 - `/control/start?mode=advanced&profile=Default`：远程拉起高级模式浏览器
+- `/control/ensure-site-tab?url=...&host=...`：优先复用已有站点页，不存在再预热创建
 - `/json/version?token=xxx`：检查bridge状态
 - `/devtools/browser?token=xxx`：CDP WebSocket连接地址
 
@@ -81,6 +82,7 @@ flowchart LR
 4. 点击「一键启动」，或让远端Agent通过API远程拉起
 
 > 💡 高级模式副本默认保存在Chrome用户目录附近的`CDP Bridge Profiles/`，自动识别复用，无需手动配置。
+> 💡 0.2.9 新增 `ensure-site-tab` 预热能力，适合 ChatGPT / 豆包 这类高风控网页先复用已有可信页，再交给 Agent 自动化。
 
 #### 2. 远端Agent对接
 先检查bridge连通性：
@@ -93,6 +95,9 @@ curl -s "http://<tailscale-ip>:<bridge-port>/json/version?token=<token>" --conne
 curl -X POST "http://<tailscale-ip>:<bridge-port>/control/start?token=<token>&mode=clean"
 # 高级模式（持久副本）
 curl -X POST "http://<tailscale-ip>:<bridge-port>/control/start?token=<token>&mode=advanced&profile=Default"
+
+# 预热 / 复用站点标签页
+curl -X POST "http://<tailscale-ip>:<bridge-port>/control/ensure-site-tab?token=<token>&url=https%3A%2F%2Fchatgpt.com%2F&host=chatgpt.com"
 ```
 成功后直接连接返回的WS地址即可操控浏览器。
 
@@ -151,6 +156,9 @@ curl -X POST "http://<tailscale-ip>:<port>/control/start?token=<token>&mode=clea
 
 # Persistent replica (reuse login state, extensions, history)
 curl -X POST "http://<tailscale-ip>:<port>/control/start?token=<token>&mode=advanced&profile=Default"
+
+# Prewarm or reuse a trusted site tab
+curl -X POST "http://<tailscale-ip>:<port>/control/ensure-site-tab?token=<token>&url=https%3A%2F%2Fchatgpt.com%2F&host=chatgpt.com"
 ```
 
 ### Modes
