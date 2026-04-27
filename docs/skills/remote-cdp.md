@@ -170,3 +170,73 @@ Connect to ws://<TAILSCALE_IP>:<BRIDGE_PORT>/devtools/browser?token=<TOKEN>&sess
 Take a snapshot before interactions and cleanup only targets created by <SESSION_ID>.
 Mask tokens in all output.
 ```
+
+## cdper-mcp handoff
+
+If the task involves using cdper-mcp tools (`chatgpt_query`, `doubao_query`, `cdp_fetch`, etc.), configure the bridge endpoint as the MCP CDP source:
+
+```bash
+# Write bridge WS endpoint to MCP config
+echo '{"ws_url": "ws://<TAILSCALE_IP>:<BRIDGE_PORT>/devtools/browser?token=<TOKEN>"}' > ~/.cdp-auth.json
+```
+
+Then install official packages and verify:
+
+```bash
+npm install -g @bsbofmusic/cdper-mcp
+cdper-mcp install chatgpt
+cdper-mcp install doubao
+cdper-mcp install reddit
+cdper_doctor
+```
+
+Register as MCP server in your agent client:
+
+```json
+{
+  "mcpServers": {
+    "cdper": {
+      "command": "cdper-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+First query after setup:
+
+```json
+{
+  "tool": "chatgpt_query",
+  "params": {
+    "query": "Reply with: READY",
+    "conversationPolicy": "fresh",
+    "expectedDuration": "short"
+  }
+}
+```
+
+## Bridge diagnostics and scoped cleanup
+
+Check full bridge diagnostics:
+
+```bash
+curl -sS --connect-timeout 5 "http://<TAILSCALE_IP>:<BRIDGE_PORT>/status?token=<TOKEN>"
+```
+
+Close only targets created by the current session (scoped cleanup):
+
+```bash
+curl -sS -X POST \
+  "http://<TAILSCALE_IP>:<BRIDGE_PORT>/control/close-session-targets?token=<TOKEN>&sessionId=<SESSION_ID>"
+```
+
+If the endpoint is not available on your bridge version, close only pages whose `sessionId` or `sessionLabel` matches the current task. Never close all targets blindly.
+
+## Tailscale discovery tips
+
+- Use `tailscale status` to list connected peers and their IPs.
+- Use `tailscale ping <TAILSCALE_IP>` to confirm reachability before probing the bridge.
+- If MagicDNS is enabled, you can use the machine hostname instead of IP: `http://<MACHINE_NAME>.<TAILNET_NAME>.ts.net:<BRIDGE_PORT>/status?token=<TOKEN>`.
+- The bridge port is shown in the cdp-bridge tray app. Default is typically `39222` but may differ per install.
+- If you don't know the token, ask the user to copy it from the tray app ("Copy Developer CDP URL" contains the token).
