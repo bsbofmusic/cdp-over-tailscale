@@ -1,41 +1,172 @@
 # Remote CDP Skill
-适用于OpenClaw等支持Skill的Agent，对接CDP Bridge + cdper实现网页自动化，开箱即用。
 
-## 🎯 核心规则
-### 1. 前置检查
-所有CDP操作前必须执行窗口探针：
-```bash
-node /path/to/cdp-window-probe.js
+Use this skill when an agent needs to control a user-owned Chrome/Edge/Chromium browser through **cdp-bridge over Tailscale**.
+
+This document is safe for public repositories: it uses placeholders only and never embeds real bridge tokens, GitHub tokens, private IPs, or user-specific WebSocket URLs.
+
+## Non-negotiable safety rules
+
+1. **Never ask the user to expose raw Chrome `9222` publicly.** Use cdp-bridge over Tailscale only.
+2. **Never require firewall/port-forwarding changes** unless the user explicitly chooses a different network model.
+3. **Never invent or store tokens.** If `<TOKEN>` is missing, ask the user for it or ask them to copy it from the cdp-bridge tray app.
+4. **Never print real tokens in final output.** Mask as `<TOKEN>` or `abcd…wxyz`.
+5. **Separate bridge health from browser CDP readiness.** A bridge can be reachable while `cdpReady=false`; start the browser before connecting CDP.
+6. **Use a unique `sessionId` and `sessionLabel` per run** so cleanup and diagnostics can be scoped to the current agent task.
+7. **Only close targets/pages created by the current session.** Do not close the user’s existing tabs or all browser targets.
+8. Prefer DOM/accessibility snapshots before screenshots or blind clicks; understand the page before interacting.
+
+## Required placeholders
+
+Use these placeholders in docs, examples, logs, and generated configs:
+
+- `<TAILSCALE_IP>` — the cdp-bridge machine's Tailscale IP or MagicDNS name
+- `<BRIDGE_PORT>` — cdp-bridge HTTP/CDP port
+- `<TOKEN>` — cdp-bridge auth token supplied by the user
+- `<SESSION_ID>` — unique per task, for example `agent-20260427-153000-a1b2`
+- `<SESSION_LABEL>` — human-readable label, for example `openclaw-checkout-test`
+
+## Discovery workflow
+
+### 1. Collect only missing inputs
+
+Ask the user only for fields that are not already known:
+
+```text
+I need the cdp-bridge Tailscale host/port and bridge token.
+Please provide:
+- Tailscale host/IP: <TAILSCALE_IP>
+- Bridge port: <BRIDGE_PORT>
+- Token: <TOKEN>
 ```
-- 窗口数>20时提醒用户，不自动清理，由用户决定是否清理
-- 探针执行失败不阻断后续操作，只做提醒
 
-### 2. cdper调用规范
-使用`key=value`格式传参，禁止使用`--key value`格式：
+If the user already provided a host and port but not a token, ask only for the token.
+
+### 2. Check Tailscale reachability
+
+Use the platform-appropriate command if available:
+
 ```bash
-# 单页抓取
-mcporter call cdper.cdp_fetch url="https://example.com" extract_template="xiaohongshu-note"
-# 截图
-mcporter call cdper.cdp_screenshot url="https://example.com" save_path="./screenshot.png"
-# 交互操作
-mcporter call cdper.cdp_interact url="https://example.com" action="click" selector="#submit"
-# 批量抓取
-mcporter call cdper.cdp_batch_fetch urls='["https://example.com", "https://baidu.com"]'
+tailscale status
+tailscale ping <TAILSCALE_IP>
 ```
 
-### 3. 反爬优化规则
-- 默认开启`anti_scraping=true`，自动使用随机UA、指纹、模拟滚动、真人延迟
-- 高风控站点优先使用高级模式（带登录态的持久副本）
-- 批量爬取并发默认≤2，避免触发风控
+If Tailscale CLI is unavailable, continue with HTTP probes and report that Tailscale CLI checks were skipped.
 
-### 4. 故障排查
-- 连接失败：先检查Tailscale连通性、token、端口、防火墙
-- 反爬拦截：切换到高级模式、增加延迟、更换指纹
-- CDP崩溃：调用`/control/start`重新拉起浏览器即可
+### 3. Probe bridge status
 
-## 📋 内置提取模板
-| 模板名 | 适用场景 | 提取字段 |
-|--------|----------|----------|
-| xiaohongshu-note | 小红书笔记页 | 标题、点赞、收藏、评论、正文、作者、发布时间 |
-| reddit-post | Reddit帖子页 | 标题、点赞、评论、正文、作者 |
-| amazon-product | 亚马逊商品页 | 标题、价格、评分、评论数 |
+Prefer short timeouts and do not retry blindly.
+
+```bash
+curl -sS --connect-timeout 5 "http://<TAILSCALE_IP>:<BRIDGE_PORT>/status?token=<TOKEN>"
+curl -sS --connect-timeout 5 "http://<TAILSCALE_IP>:<BRIDGE_PORT>/json/version?token=<TOKEN>"
+```
+
+Interpret results:
+
+- HTTP 200 + bridge JSON returned: bridge is online.
+- `cdpReady=true`: browser CDP endpoint is ready.
+- `cdpReady=false` or `/json/version` fails while `/status` works: bridge is online, browser needs start/restart.
+- 401/403: token is wrong or missing; ask user to confirm token.
+- connection refused/timeout: host, port, Tailscale, or bridge process issue.
+
+### 4. Start browser when `cdpReady=false`
+
+Use advanced mode for logged-in browser workflows; use clean mode only for stateless tasks.
+
+```bash
+# Logged-in persistent browser replica
+curl -sS -X POST "http://<TAILSCALE_IP>:<BRIDGE_PORT>/control/start?token=<TOKEN>&mode=advanced&profile=Default"
+
+# Clean isolated browser, no login state
+curl -sS -X POST "http://<TAILSCALE_IP>:<BRIDGE_PORT>/control/start?token=<TOKEN>&mode=clean"
+```
+
+After starting, re-run `/json/version` and confirm CDP readiness.
+
+## CDP connection rules
+
+Build the WebSocket URL from the bridge endpoint and include session identifiers:
+
+```text
+ws://<TAILSCALE_IP>:<BRIDGE_PORT>/devtools/browser?token=<TOKEN>&sessionId=<SESSION_ID>&sessionLabel=<SESSION_LABEL>
+```
+
+When automating high-risk/login sites, first reuse or prewarm a trusted site tab instead of opening/closing many tabs:
+
+```bash
+curl -sS -X POST "http://<TAILSCALE_IP>:<BRIDGE_PORT>/control/ensure-site-tab?token=<TOKEN>&url=https%3A%2F%2Fchatgpt.com%2F&host=chatgpt.com"
+```
+
+Then connect CDP and attach to the returned or matching target.
+
+## Page interaction workflow
+
+1. Generate a unique `<SESSION_ID>` and `<SESSION_LABEL>`.
+2. Confirm bridge online and `cdpReady=true`.
+3. Connect CDP with the session identifiers.
+4. Reuse an existing site tab when appropriate; avoid mechanical tab churn.
+5. Capture a snapshot/accessibility tree before interacting.
+6. Interact through stable selectors/roles/text first; use coordinates only as last resort.
+7. Wait for network/DOM/state changes explicitly; do not use blind fixed sleeps except short stabilization pauses.
+8. On completion, close only pages created by `<SESSION_ID>`.
+9. Return a concise diagnostic summary.
+
+## Expected final report
+
+Always include:
+
+```json
+{
+  "bridge": {
+    "host": "<TAILSCALE_IP>",
+    "port": "<BRIDGE_PORT>",
+    "online": true,
+    "cdpReady": true
+  },
+  "session": {
+    "sessionId": "<SESSION_ID>",
+    "sessionLabel": "<SESSION_LABEL>",
+    "mode": "advanced"
+  },
+  "page": {
+    "url": "https://example.com/",
+    "title": "Example"
+  },
+  "actions": [
+    "status_probe",
+    "start_browser_if_needed",
+    "connect_cdp",
+    "snapshot",
+    "task_actions",
+    "scoped_cleanup"
+  ],
+  "diagnostics": {
+    "failedCommand": null,
+    "error": null
+  }
+}
+```
+
+If the task fails, include the failed command with token masked, the HTTP status/error, and the next recommended action.
+
+## Troubleshooting map
+
+| Symptom | Likely cause | Action |
+|---|---|---|
+| Timeout connecting to host | Tailscale offline, wrong host, bridge not running | Check `tailscale status`, tray app, and `<TAILSCALE_IP>:<BRIDGE_PORT>` |
+| 401 / 403 | Missing or wrong token | Ask user to copy the current token from cdp-bridge |
+| `/status` works but `/json/version` fails | Browser CDP not started | Call `/control/start`, then re-probe |
+| Browser opens but page is not logged in | Clean mode or wrong advanced profile | Use `mode=advanced&profile=Default`; ask user to log in once locally |
+| Many stale tabs | Previous sessions did not cleanup | Close only tabs created by the current session; ask user before broad cleanup |
+| Site verification/captcha | Site requires human action | Stop automation and ask user to complete verification manually |
+
+## Example agent prompt snippet
+
+```text
+Use cdp-bridge via Tailscale. Do not expose raw 9222. Probe:
+http://<TAILSCALE_IP>:<BRIDGE_PORT>/status?token=<TOKEN>
+If bridge is online but cdpReady=false, call /control/start with mode=advanced&profile=Default.
+Connect to ws://<TAILSCALE_IP>:<BRIDGE_PORT>/devtools/browser?token=<TOKEN>&sessionId=<SESSION_ID>&sessionLabel=<SESSION_LABEL>.
+Take a snapshot before interactions and cleanup only targets created by <SESSION_ID>.
+Mask tokens in all output.
+```
